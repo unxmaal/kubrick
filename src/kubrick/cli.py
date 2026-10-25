@@ -176,7 +176,7 @@ def run(a: argparse.Namespace) -> int:
 
         from kubrick import finetune, scale
 
-        films, frames, cuts = {}, {}, {}
+        films, frames, film_cuts = {}, {}, {}
         for spec in a.films:
             npz, csv, npy, cut = spec.split(":")
             name = Path(npz).stem
@@ -187,8 +187,8 @@ def run(a: argparse.Namespace) -> int:
             fr = np.load(npy, mmap_mode="r")
             n = min(len(fr), len(film["y"]))
             film["y"] = film["y"][:n]
-            films[name], frames[name], cuts[name] = film, fr, json.loads(Path(cut).read_text(encoding="utf-8"))
-        r = finetune.leave_one_out(films, frames, cuts, a.epochs, a.stride, a.control, a.draws, a.boots,
+            films[name], frames[name], film_cuts[name] = film, fr, json.loads(Path(cut).read_text(encoding="utf-8"))
+        r = finetune.leave_one_out(films, frames, film_cuts, a.epochs, a.stride, a.control, a.draws, a.boots,
                                    log=lambda m: print(json.dumps({"log": m}), file=sys.stderr, flush=True))
         for name, v in r.items():
             print(json.dumps({"test": name, "control": a.control, **v}, default=float), flush=True)
