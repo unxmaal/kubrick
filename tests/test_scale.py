@@ -86,6 +86,29 @@ def test_evaluate_ignores_unlabelled_seconds():
     assert scale.evaluate(films, ["f0"], ["f1"])["f1"]["n"] == 500
 
 
+def test_evaluate_refuses_films_with_different_feature_configurations():
+    films = {f"f{i}": _film(i) for i in range(2)}
+    films["f0"]["features"] = ("facebook/dinov2-small", 4)
+    films["f1"]["features"] = ("facebook/dinov2-base", 4)
+    with pytest.raises(ValueError, match="feature configurations"):
+        scale.evaluate(films, ["f0"], ["f1"])
+
+
+def test_embedder_grid_changes_the_features_it_returns():
+    frame = np.random.default_rng(0).integers(0, 255, (224, 398, 3), dtype=np.uint8)
+    plain = scale.Embedder(grid=0, device="cpu")([frame])
+    gridded = scale.Embedder(grid=4, device="cpu")([frame])
+    assert gridded.shape[1] == plain.shape[1] + 16 * plain.shape[1] // 2
+
+
+def test_featurise_records_its_configuration(tmp_path, monkeypatch):
+    monkeypatch.setattr(scale, "sample_frames", lambda path: iter([(0.0, np.zeros((224, 398, 3), np.uint8))]))
+    out = tmp_path / "f.npz"
+    scale.featurise("unused", out, grid=2)
+    d = np.load(out)
+    assert (str(d["model"]), int(d["grid"])) == (scale.EMBED_MODEL, 2)
+
+
 def test_read_cinescale_marks_not_available(tmp_path):
     p = tmp_path / "f.csv"
     p.write_text(",time,shotscale\n0,00:00:00,8\n1,00:00:01,9\n2,00:00:02,2\n", encoding="utf-8")

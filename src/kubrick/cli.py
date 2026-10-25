@@ -29,12 +29,15 @@ def main(argv: list[str] | None = None) -> int:
     f = sub.add_parser("features", help="per-second image features and thumbnails (.npz)")
     f.add_argument("video")
     f.add_argument("out", type=Path)
+    f.add_argument("--model")
+    f.add_argument("--grid", type=int)
     a = p.parse_args(argv)
 
     if a.cmd == "features":
         from kubrick import scale
 
-        scale.featurise(a.video, a.out)
+        scale.featurise(a.video, a.out, model=a.model or scale.EMBED_MODEL,
+                        grid=scale.GRID if a.grid is None else a.grid)
         return 0
 
     if a.cmd == "synth":

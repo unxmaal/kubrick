@@ -129,7 +129,8 @@ def load_film(npz: Path, csv_path: Path) -> dict:
     a = check_alignment(labels, change_signal(d["thumbs"]))
     y = (map_labels(labels, len(d["feats"]), a["speed"], a["offset"]) if a["accepted"]
          else np.full(len(d["feats"]), -1))
-    return {"X": d["feats"], "y": y, "align": a}
+    features = (str(d["model"]), int(d["grid"])) if "model" in d else ("unknown", -1)
+    return {"X": d["feats"], "y": y, "align": a, "features": features}
 
 
 def evaluate(films: dict[str, dict], train: list[str], test: list[str], shuffle: bool = False,
@@ -139,6 +140,9 @@ def evaluate(films: dict[str, dict], train: list[str], test: list[str], shuffle:
     from sklearn.pipeline import make_pipeline
     from sklearn.preprocessing import StandardScaler
 
+    configs = {films[n].get("features") for n in train + test}
+    if len(configs) > 1:
+        raise ValueError(f"films carry different feature configurations: {sorted(map(str, configs))}")
     rng = np.random.default_rng(seed)
 
     def xy(names):
@@ -164,8 +168,12 @@ def evaluate(films: dict[str, dict], train: list[str], test: list[str], shuffle:
     return out
 
 
+GRID = 4  # patch tokens pooled to GRID x GRID cells; 0 keeps CLS + mean only
+
+
 class Embedder:
-    def __init__(self, model: str = EMBED_MODEL, device: str | None = None):
+    def __init__(self, model: str = EMBED_MODEL, device: str | None = None, grid: int = GRID):
+        self.grid = grid
         import torch
         from transformers import AutoImageProcessor, AutoModel
 
@@ -177,15 +185,19 @@ class Embedder:
     def __call__(self, frames: list[np.ndarray]) -> np.ndarray:
         with self.torch.no_grad():
             x = self.proc(images=frames, return_tensors="pt").to(self.device)
-            out = self.model(**x)
-            # CLS token plus mean patch token: composition lives in where things are, not only what
-            return self.torch.cat([out.last_hidden_state[:, 0], out.last_hidden_state[:, 1:].mean(1)],
-                                  dim=1).cpu().numpy()
+            h = self.model(**x).last_hidden_state
+            parts = [h[:, 0], h[:, 1:].mean(1)]
+            if self.grid:
+                # shot scale is how big the subject is in the frame, so keep where things are
+                side = int((h.shape[1] - 1) ** 0.5)
+                patches = h[:, 1:].reshape(h.shape[0], side, side, -1).permute(0, 3, 1, 2)
+                parts.append(self.torch.nn.functional.adaptive_avg_pool2d(patches, self.grid).flatten(1))
+            return self.torch.cat(parts, dim=1).cpu().numpy()
 
 
-def featurise(path: str, out: Path, batch: int = 64) -> None:
-    """Per-second DINOv2 features and 32x18 grey thumbnails for alignment, saved to `out` (.npz)."""
-    emb = Embedder()
+def featurise(path: str, out: Path, batch: int = 64, model: str = EMBED_MODEL, grid: int = GRID) -> None:
+    """Per-second image features and 32x18 grey thumbnails for alignment, saved to `out` (.npz)."""
+    emb = Embedder(model, grid=grid)
     feats, thumbs, buf = [], [], []
     for _, frame in sample_frames(path):
         buf.append(frame)
@@ -197,4 +209,5 @@ def featurise(path: str, out: Path, batch: int = 64) -> None:
             buf = []
     if buf:
         feats.append(emb(buf))
-    np.savez_compressed(out, feats=np.concatenate(feats), thumbs=np.array(thumbs, np.uint8))
+    np.savez_compressed(out, feats=np.concatenate(feats), thumbs=np.array(thumbs, np.uint8),
+                        model=np.array(model), grid=np.array(grid))
