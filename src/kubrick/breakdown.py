@@ -11,7 +11,15 @@ import numpy as np
 from kubrick import cuts, movement
 
 PACKAGES = ("kubrick", "transnetv2-pytorch", "scenedetect", "torch", "numpy")
-MOVEMENT_FRAMES = 24  # consecutive frames from the middle of a shot used for its movement
+# consecutive frames from the middle of a shot used for its movement. Known-answer clips hold every kind at
+# 24 and 48 frames; at 12, shake has real net drift and reads as tilt, so shorter shots are not judged
+MOVEMENT_FRAMES = cuts.Knob(24, (24, 48))
+
+
+def movement_of(clip: np.ndarray) -> str:
+    if len(clip) < MOVEMENT_FRAMES.default:
+        return "unknown:too-short"
+    return movement.classify(movement.motion(clip[:MOVEMENT_FRAMES.default]))
 
 
 def digest(path: Path) -> str:
@@ -31,7 +39,7 @@ def settings() -> dict:
     return {"transnet": cuts.DETECTORS["transnet"].default, "transnet_span": cuts.TRANSNET_SPAN.default,
             "gap_close": cuts.GAP_CLOSE.default, "cut_run": cuts.CUT_RUN.default, "min_len": cuts.MIN_LEN.default,
             "zoom": movement.ZOOM.default, "shift": movement.SHIFT.default, "jitter": movement.JITTER.default,
-            "min_texture": movement.MIN_TEXTURE.default}
+            "min_texture": movement.MIN_TEXTURE.default, "movement_frames": MOVEMENT_FRAMES.default}
 
 
 def shots_from_transitions(found: list[dict], n_frames: int) -> list[dict]:
@@ -80,9 +88,9 @@ def breakdown(path: str, out_dir: Path, scale_model: Path | None = None) -> list
             grab(path, f / fps, out_dir / name)
             grabs.append(name)
         length = s["out"] - s["in"] + 1
-        n = min(MOVEMENT_FRAMES, length)
+        n = min(MOVEMENT_FRAMES.default, length)
         clip = frames_at(path, (s["in"] + (length - n) // 2) / fps, n)
-        mv = movement.classify(movement.motion(clip)) if len(clip) >= 3 else "unknown:too-short"
+        mv = movement_of(clip)
         row = {"digest": d, "shot": i, "in": s["in"], "out": s["out"], "fps": fps,
                "timecode_in": round(s["in"] / fps, 3), "timecode_out": round((s["out"] + 1) / fps, 3),
                "duration_s": length / fps, "into": s["into"], "grabs": grabs, "movement": mv,

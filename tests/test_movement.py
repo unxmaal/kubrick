@@ -85,6 +85,22 @@ def test_a_clip_with_no_texture_is_unknown_not_static():
     assert mv.classify(mv.motion(clip)) == "unknown:no-texture"
 
 
+def test_a_shot_shorter_than_the_movement_window_is_too_short_to_judge():
+    # 12 frames of shake has real net drift, so handheld reads as tilt: not knowable, so not guessed
+    from kubrick import breakdown
+
+    assert breakdown.movement_of(mv.render(texture(), "handheld", seed=5)[:12]) == "unknown:too-short"
+    assert breakdown.movement_of(mv.render(texture(), "pan", seed=5)[:24]) == "pan"
+
+
+@pytest.mark.parametrize("n", [24, 48])
+def test_movement_holds_on_the_clip_lengths_breakdown_may_use(n):
+    for kind in KINDS:
+        clip = mv.render(texture(), kind, seed=5, frames=48)
+        start = (48 - n) // 2
+        assert mv.classify(mv.motion(clip[start:start + n])) == kind, (kind, n)
+
+
 def test_unknown_movement_is_refused():
     with pytest.raises(ValueError, match="unknown movement"):
         mv.render(texture(), "dolly-zoom")
