@@ -1,6 +1,7 @@
 import json
 import subprocess
 
+import numpy as np
 import pytest
 
 from kubrick import cuts, synth, taxonomy
@@ -112,6 +113,29 @@ def test_cli_cuts_applies_the_flash_guard_and_min_len_it_is_given(tmp_path, caps
     main(base + ["--flash-guard", "10"])
     guarded = json.loads(capsys.readouterr().out)
     assert 38 in unguarded and guarded == [48]
+
+
+def test_close_gaps_joins_near_runs_only():
+    a = np.array([0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0], bool)
+    assert cuts._run_ends(a) == [2, 5, 11]
+    assert cuts._run_ends(cuts.close_gaps(a, 2)) == [3, 11]  # one 4-frame run: a gradual, at its midpoint
+    assert cuts._run_ends(cuts.close_gaps(a, 0)) == [2, 5, 11]
+
+
+def test_a_long_run_is_reported_inside_it_not_after():
+    a = np.zeros(40, bool)
+    a[10:30] = True
+    assert cuts._run_ends(a) == [20]
+
+
+def test_transnet_finds_a_hard_cut_and_a_dissolve_once_each(tmp_path):
+    out = tmp_path / "t.mp4"
+    t = synth.build(spec([{"kind": "cut"}, {"kind": "dissolve", "frames": 24}]), out)
+    found = cuts.detect(str(out), "transnet")
+    r = score(t, found)
+    assert r["per_kind"]["cut"]["recall"] == 1.0
+    assert r["per_kind"]["dissolve"]["recall"] == 1.0
+    assert r["false"] == 0
 
 
 def test_unknown_label_is_kept_not_mapped():

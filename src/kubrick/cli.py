@@ -20,7 +20,7 @@ def main(argv: list[str] | None = None) -> int:
     k.add_argument("--seed", type=int, default=0)
     c = sub.add_parser("cuts", help="detect cuts")
     c.add_argument("video")
-    c.add_argument("--detector", choices=cuts.DETECTORS, default="adaptive")
+    c.add_argument("--detector", choices=cuts.DETECTORS, default="transnet")
     c.add_argument("--threshold", type=float)
     c.add_argument("--flash-guard", type=float)
     c.add_argument("--min-len", type=int)
@@ -39,17 +39,25 @@ def main(argv: list[str] | None = None) -> int:
     elif a.cmd == "sweep":
         truth = json.loads(a.video.with_suffix(".truth.json").read_text())
         video = str(a.video)
+
+        def emit(found: list[int], **setting) -> None:
+            r = score(truth, cuts._min_len(found, cuts.MIN_LEN.default))
+            print(json.dumps({
+                **setting, "cut_f1": round(r["cut_f1"], 3),
+                **{f"{k}_recall": round(v["recall"], 3) for k, v in r["per_kind"].items()},
+                "false": r["false"], "negatives_triggered": round(r["negatives_triggered"], 3),
+                "false_elsewhere_per_10min": round(r["false_elsewhere_per_10min"], 2)}), flush=True)
+
         for name, knob in cuts.DETECTORS.items():
             for t in knob.sweep:
+                if name == "transnet":
+                    for sp in cuts.TRANSNET_SPAN.sweep:
+                        for gap in cuts.GAP_CLOSE.sweep:
+                            emit(cuts._transnet(video, t, sp, gap), detector=name, threshold=t, span=sp, gap=gap)
+                    continue
                 raw = cuts.detect(video, name, t, min_len=1, flash_guard=0)
                 for g in cuts.FLASH_GUARD.sweep:
-                    found = cuts._min_len(cuts._drop_flashes(video, raw, g) if g else raw, cuts.MIN_LEN.default)
-                    r = score(truth, found)
-                    print(json.dumps({
-                        "detector": name, "threshold": t, "flash_guard": g, "cut_f1": round(r["cut_f1"], 3),
-                        **{f"{k}_recall": round(v["recall"], 3) for k, v in r["per_kind"].items()},
-                        "false": r["false"], "negatives_triggered": round(r["negatives_triggered"], 3),
-                        "false_elsewhere_per_10min": round(r["false_elsewhere_per_10min"], 2)}), flush=True)
+                    emit(cuts._drop_flashes(video, raw, g) if g else raw, detector=name, threshold=t, flash_guard=g)
     return 0
 
 
