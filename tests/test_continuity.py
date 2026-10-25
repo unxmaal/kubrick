@@ -116,3 +116,30 @@ def test_check_does_not_modify_the_scene():
     before = copy.deepcopy(s)
     c.check(s)
     assert s == before
+
+
+def test_a_shot_along_the_line_lets_the_next_shot_cross():
+    s = clean()
+    s["shots"][1]["camera"] = camera(-6, 0, (0, 0))  # on the A-B line
+    s["shots"][1].pop("gaze")
+    s["shots"][2]["camera"] = camera(-1, 2, (4, 0))  # north side
+    s["shots"][2].pop("gaze")
+    assert "axis-180" not in ids(s)
+
+
+def test_a_cross_declared_with_a_reason_is_not_a_violation():
+    s = clean()
+    s["shots"][2]["camera"] = camera(-1, 2, (4, 0))
+    s["shots"][2].pop("gaze")
+    s["shots"][2]["crosses_line"] = "camera dollies across behind A, seen on screen"
+    assert "axis-180" not in ids(s)
+
+
+def test_a_declared_cross_excuses_only_its_own_cut():
+    s = clean()
+    s["shots"][1]["camera"] = camera(5, 2, (0, 0))
+    s["shots"][1].pop("gaze")
+    s["shots"][1]["crosses_line"] = "the turn in the argument"
+    s["shots"][2]["camera"] = camera(-1, -2, (4, 0))  # back to the south side, undeclared
+    s["shots"][2].pop("gaze")
+    assert [v["shot"] for v in c.check(s) if v["rule"] == "axis-180"] == ["3"]

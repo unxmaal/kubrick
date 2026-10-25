@@ -6,7 +6,7 @@ A caution from the research: viewers miss most continuity slips in finished film
 
 ## axis-180
 - kind: practice
-- decision: When two characters face each other, keep the camera on one side of the line between them for every shot of the pair. Cross only on screen (a moving camera or a shot along the line), or on purpose with a reason in the shot description.
+- decision: When two characters face each other, keep the camera on one side of the line between them for every shot of the pair. Cross through a shot along the line, or declare the cross in the floor plan as the shot's `crosses_line` with its reason: a camera move across the line seen on screen, or a deliberate cross.
 - applies when: Consecutive shots show the same two characters.
 - check: `kubrick continuity` prints no axis-180 line for the scene.
 - counterexample: A deliberate cross to mark a turn in a confrontation, shown so the viewer can follow it.
