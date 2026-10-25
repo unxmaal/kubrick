@@ -67,6 +67,87 @@ def test_render_shows_each_panel_for_its_own_shot(proj, tmp_path):
     assert abs(luma[4 * animatic.FPS - 1] - 60) < 15 and abs(luma[4 * animatic.FPS + 1] - 200) < 15
 
 
+def tone(path, seconds, freq=440):
+    subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y", "-f", "lavfi", "-i",
+                    f"sine=frequency={freq}:duration={seconds}", "-ar", "48000", str(path)], check=True)
+
+
+def loudness(path, start, end):
+    raw = subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-ss", str(start), "-t", str(end - start), "-i", str(path),
+                          "-vn", "-ac", "1", "-ar", "8000", "-f", "s16le", "-"], capture_output=True, check=True).stdout
+    return float(np.abs(np.frombuffer(raw, np.int16)).mean()) if raw else 0.0
+
+
+def with_vo(proj):
+    tone(proj / "vo1.wav", 2.5)
+    shots = json.loads((proj / "shotlist.json").read_text())
+    shots["scenes"][0]["shots"][0]["vo_audio"] = "vo1.wav"
+    (proj / "shotlist.json").write_text(json.dumps(shots))
+    return proj
+
+
+def test_voiceover_sits_on_its_shot_and_the_render_carries_it(proj, tmp_path):
+    with_vo(proj)
+    tl = animatic.timeline(stages.load_project(proj))
+    audio = [t for t in tl.tracks if t.kind == otio.schema.TrackKind.Audio]
+    assert audio and [c.name for c in audio[0].find_clips()] == ["1A vo"]
+    video = next(t for t in tl.tracks if t.kind == otio.schema.TrackKind.Video)
+    assert audio[0].duration() == video.duration()  # else every later line starts late
+    out = tmp_path / "a.mp4"
+    animatic.render(tl, proj, out)
+    assert loudness(out, 0.2, 2.3) > 1000  # the line plays over 1A
+    assert loudness(out, 4.5, 6.8) < 50  # 1B has no line
+    dur = lambda kind: float(subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", f"{kind}:0", "-show_entries", "stream=duration", "-of", "csv=p=0",
+         str(out)], capture_output=True, text=True, check=True).stdout)
+    assert abs(dur("a") - dur("v")) <= 1 / animatic.FPS
+
+
+def test_a_line_on_a_later_shot_starts_at_that_shot(proj, tmp_path):
+    # a line at time zero cannot show a placement bug; 1B starts at 4 s
+    tone(proj / "vo2.wav", 2.0, freq=660)
+    shots = json.loads((proj / "shotlist.json").read_text())
+    shots["scenes"][0]["shots"][1]["vo_audio"] = "vo2.wav"
+    (proj / "shotlist.json").write_text(json.dumps(shots))
+    out = tmp_path / "b.mp4"
+    animatic.render(animatic.timeline(stages.load_project(proj)), proj, out)
+    assert loudness(out, 0.2, 3.8) < 50
+    assert loudness(out, 4.2, 5.8) > 1000
+
+
+def test_a_render_that_runs_past_its_limit_fails_instead_of_hanging(proj, tmp_path, monkeypatch):
+    # an audio filter without its trim pads forever; the render must stop, not hang the caller
+    monkeypatch.setattr(animatic, "RENDER_TIMEOUT_S", 0.01)
+    monkeypatch.setattr(animatic, "RENDER_SECONDS_PER_SECOND", 0)
+    with pytest.raises(RuntimeError, match="did not finish"):
+        animatic.render(animatic.timeline(stages.load_project(proj)), proj, tmp_path / "c.mp4")
+
+
+def test_an_unreadable_voiceover_file_is_reported_not_a_crash(proj):
+    with_vo(proj)
+    (proj / "vo1.wav").write_bytes(b"not audio at all")
+    assert any("vo1.wav" in e and "cannot be read" in e for e in stages.validate_project(proj))
+
+
+def test_the_timeline_refuses_a_line_longer_than_its_shot_rather_than_cutting_it(proj):
+    with_vo(proj)
+    tone(proj / "vo1.wav", 5.0)
+    with pytest.raises(ValueError, match="longer than"):
+        animatic.timeline(stages.load_project(proj))
+
+
+def test_a_line_longer_than_its_shot_is_rejected(proj):
+    with_vo(proj)
+    tone(proj / "vo1.wav", 5.0)  # 1A lasts 4 s
+    assert any("vo1.wav" in e and "longer" in e for e in stages.validate_project(proj))
+
+
+def test_a_missing_voiceover_file_is_rejected(proj):
+    with_vo(proj)
+    (proj / "vo1.wav").unlink()
+    assert any("vo1.wav" in e and "does not exist" in e for e in stages.validate_project(proj))
+
+
 def test_an_invalid_project_is_refused_before_building(proj):
     (proj / "floorplan.json").write_text(json.dumps({"scenes": []}), encoding="utf-8")
     with pytest.raises(ValueError, match="floorplan.json"):
