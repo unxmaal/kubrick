@@ -1,6 +1,6 @@
 # Look: light and emphasis
 
-Rules for lighting and framing as storytelling. Together with mcm RULE #155: always state the light and exposure in a look description, or the image model supplies its own. A source marked `secondary` reports a book we have not read.
+Rules for lighting and framing as storytelling. Together with mcm RULE #155: always state the light and exposure in a look description, or the image model supplies its own. A source marked `secondary` reports a book we have not read; the rule names the book it reports. The books are not read at all: a rule is settled by two independent retrievable sources or by our own data, and an LLM summary is never a source.
 
 ## motivated-key
 - kind: practice
@@ -14,13 +14,14 @@ Rules for lighting and framing as storytelling. Together with mcm RULE #155: alw
 
 ## key-fill-ratio
 - kind: provisional
-- decision: Choose the key-to-fill ratio for mood: about 2:1 reads high key, 4:1 low key, 8:1 very low key. The ratio is key plus fill over fill.
+- decision: State the light as a key-to-fill ratio, key plus fill over fill: 2:1 puts the shadow side one stop under, 4:1 two stops, 8:1 three. Read 2:1 as high key, 4:1 as low key and 8:1 as very low key.
 - applies when: Describing the light of a shot or a still prompt.
 - check: Look descriptions state a ratio or say high key, low key or very low key.
 - counterexample: A flat, even light chosen on purpose for a clinical feel.
-- confirm: The ASC Manual's section on lighting ratios, once the book arrives.
+- confirm: The stop arithmetic has two sources; the high and low key labels have one, and Musto treats 4:1 as an ordinary portrait ratio. A second source on what the ratios read as would settle it.
 - sources:
-  - UT Austin RTF 318 course wiki, Lighting ratios.
+  - UT Austin RTF 318 course wiki, Lighting ratios: the formula, the stops, and the high, low and very low key labels.
+  - Musto 2014, Lighting by the Numbers, TV Technology: 2:1 is one stop, 4:1 two; the choice is one of style.
 
 ## frame-for-emotion
 - kind: practice
@@ -38,6 +39,6 @@ Rules for lighting and framing as storytelling. Together with mcm RULE #155: alw
 - applies when: Planning the order of information in a scene with a threat.
 - check: The shot list shows the threat to the audience before the scene's characters react to it, or notes why surprise is wanted.
 - counterexample: Hitchcock's own Psycho shower scene, a surprise by design.
-- confirm: Hitchcock/Truffaut, p. 52 (1967 edition), once the book arrives.
+- confirm: A second source on the bomb-under-the-table account, independent of Bordwell 2013.
 - sources:
   - secondary: Bordwell 2013, Hitchcock, Lessing, and the bomb under the table, davidbordwell.net, on Hitchcock/Truffaut p. 52 and the interview tapes: the bomb-under-the-table account, traced back to Lessing, with Hitchcock's own exceptions.

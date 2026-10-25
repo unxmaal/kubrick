@@ -48,7 +48,7 @@ A caution from the research: viewers miss most continuity slips in finished film
 - sources:
   - Smith 2012, Projections 6(1), author PDF pp. 23-24: a match-on-action cut works when the action carries on at the same place on screen, and many such cuts go unnoticed.
   - Magliano and Zacks 2011, Cognitive Science 35(8), Study 1, section 2.2: cuts that break the action drove viewers' sense of a new event far more strongly than continuity cuts did; continuous action is what lets viewers bridge a cut.
-  - No readable source quantifies how much overlap is tolerated; the checker's tolerance is a registered setting, not a finding.
+  - Hecht and Kalkofen 2009, Questioning the Rules of Continuity Editing, Empirical Studies of the Arts 27(1), pp. 3-4 and discussion: Dmytryk (reported) asks for a 3-5 frame overlap of the action across a cut; their viewers preferred a gap of about 4 frames. So a small skip forward is safe and repetition is not needed; the checker's overlap tolerance stays a registered setting.
 
 ## wardrobe-state
 - kind: practice
