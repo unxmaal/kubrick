@@ -75,6 +75,13 @@ def test_a_shot_missing_from_the_floor_plan_is_rejected(tmp_path):
     assert any("1B" in e and "floorplan" in e for e in stages.validate_project(write(tmp_path, docs)))
 
 
+def test_a_gaze_target_the_floor_plan_does_not_place_is_rejected(tmp_path):
+    docs = project()
+    docs["floorplan.json"]["scenes"][0]["shots"]["1A"]["looks"] = {"GUARD": "STRANGER"}
+    errors = stages.validate_project(write(tmp_path, docs))
+    assert any("STRANGER" in e and "1A" in e for e in errors)
+
+
 def test_a_breakdown_scene_whose_heading_is_not_in_the_script_is_rejected(tmp_path):
     docs = project()
     docs["breakdown.json"]["scenes"][0]["heading"] = "INT. NOWHERE - DAY"

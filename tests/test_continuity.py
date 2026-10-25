@@ -103,6 +103,14 @@ def test_a_violation_names_the_shots_and_the_rule():
     assert v["shot"] == "3" and v["previous"] == "2"
 
 
+def test_a_gaze_at_an_unplaced_character_is_a_violation_not_a_crash():
+    s = clean()
+    s["shots"][1]["looks"] = {"A": "C"}
+    s["shots"][1]["gaze"] = {"A": "right"}
+    found = [v for v in c.check(s) if v["rule"] == "eyeline-match"]
+    assert found and "C" in found[0]["detail"] and found[0]["shot"] == "2"
+
+
 def test_check_does_not_modify_the_scene():
     s = clean()
     before = copy.deepcopy(s)
