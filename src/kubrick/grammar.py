@@ -44,8 +44,43 @@ MEASURES = {"wide-then-closer": wide_then_closer, "one-step-scale-cuts": one_ste
 
 
 def shuffled(segs: list[list[int]], rng) -> list[list[int]]:
-    """The same shots in each segment, in a random order: keeps what a film uses, drops when it uses it."""
-    return [list(rng.permutation(s)) for s in segs]
+    """Each segment's shots in a random order, seen the way the labels see a film: two same-scale shots in
+    a row merge into one run. Without the merge the null holds sequences the data can never show."""
+    out = []
+    for s in segs:
+        merged = []
+        for v in rng.permutation(s).tolist():
+            if not merged or merged[-1] != v:
+                merged.append(v)
+        if len(merged) > 1:
+            out.append(merged)
+    return out
+
+
+MIN_OTHER_DIRECTORS = 2  # a rule derived on one director must replicate on at least this many others
+
+
+def replicate(rule_id: str, labels_root, derive: str = "Scorsese", draws: int = 200, seed: int = 0) -> dict:
+    """Run a measured rule's statistic on every film under labels_root/<director>/*.csv against its own
+    reordering null. A director replicates when most of its films beat their null. The rule holds when the
+    deriving director and at least MIN_OTHER_DIRECTORS others replicate."""
+    from pathlib import Path
+
+    stat = MEASURES[rule_id]
+    directors = {}
+    for d in sorted(p for p in Path(labels_root).iterdir() if p.is_dir()):
+        results = [compare(scale_segments(scale.read_cinescale(f)), stat, draws, seed)
+                   for f in sorted(d.glob("*.csv"))]
+        judged = [r for r in results if r["above_null"] is not None]
+        above = sum(r["above_null"] for r in judged)
+        directors[d.name] = {
+            "films": len(judged), "above_null": above, "replicates": bool(judged) and above > len(judged) / 2,
+            "observed_mean": float(np.nanmean([r["observed"] for r in judged])) if judged else float("nan"),
+            "null_mean": float(np.nanmean([r["null_mean"] for r in judged])) if judged else float("nan")}
+    others = sum(v["replicates"] for k, v in directors.items() if k != derive)
+    holds = derive in directors and directors[derive]["replicates"] and others >= MIN_OTHER_DIRECTORS
+    return {"rule": rule_id, "derive": derive, "directors": directors, "other_directors_replicating": others,
+            "verdict": "holds" if holds else "does not hold"}
 
 
 def compare(segs: list[list[int]], stat, draws: int = 200, seed: int = 0) -> dict:
