@@ -7,7 +7,16 @@ from kubrick import cuts, knownset, synth
 from kubrick.score import score
 
 
+def commands() -> set[str]:
+    return set(next(a for a in parser()._actions if a.dest == "cmd").choices)
+
+
 def main(argv: list[str] | None = None) -> int:
+    a = parser().parse_args(argv)
+    return run(a)
+
+
+def parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="kubrick")
     sub = p.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("synth", help="build a known-answer clip from a spec")
@@ -46,7 +55,55 @@ def main(argv: list[str] | None = None) -> int:
     t.add_argument("films", nargs="+", help="features.npz:labels.csv[:pose.npz] per film")
     t.add_argument("--out", type=Path, required=True)
     t.add_argument("--kind", choices=("linear", "boost"), default="boost")
-    a = p.parse_args(argv)
+    k = sub.add_parser("card", help="a text storyboard panel for one shot")
+    k.add_argument("shot")
+    k.add_argument("text")
+    k.add_argument("out", type=Path)
+    v = sub.add_parser("validate", help="check a project's stage documents and the joins between them")
+    v.add_argument("project", type=Path)
+    v.add_argument("--until", choices=("script", "breakdown", "shotlist", "floorplan", "storyboard"),
+                   help="check the documents up to this stage only")
+    o = sub.add_parser("continuity", help="continuity violations per scene, one JSON line each")
+    o.add_argument("project", type=Path)
+    n = sub.add_parser("animatic", help="animatic.otio and animatic.mp4 from a valid project")
+    n.add_argument("project", type=Path)
+    n.add_argument("out_dir", type=Path)
+    return p
+
+
+def run(a: argparse.Namespace) -> int:
+
+    if a.cmd == "card":
+        from kubrick import animatic
+
+        animatic.card(a.shot, a.text, a.out)
+        return 0
+    if a.cmd == "validate":
+        from kubrick import stages
+
+        until = None if a.until is None else next(d for d in stages.DOCS if d.startswith(a.until + "."))
+        errors = stages.validate_project(a.project, until)
+        print("\n".join(errors) if errors else "ok")
+        return 1 if errors else 0
+    if a.cmd == "continuity":
+        from kubrick import continuity, stages
+
+        errors = stages.validate_project(a.project, until="floorplan.json")  # the storyboard comes later
+        if errors:
+            print("\n".join(errors))
+            return 2
+        proj, found = stages.load_project(a.project), 0
+        for scene in proj["shotlist.json"]["scenes"]:
+            for v in continuity.check(stages.assemble(proj, scene["id"])):
+                print(json.dumps({"scene": scene["id"], **v}))
+                found += 1
+        return 1 if found else 0
+    if a.cmd == "animatic":
+        from kubrick import animatic
+
+        otio_path, mp4 = animatic.build(a.project, a.out_dir)
+        print(json.dumps({"otio": str(otio_path), "mp4": str(mp4)}))
+        return 0
 
     if a.cmd == "breakdown":
         from kubrick import breakdown
