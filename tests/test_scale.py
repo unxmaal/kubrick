@@ -107,6 +107,14 @@ def test_evaluate_refuses_an_unknown_classifier():
         scale.evaluate(films, ["f0"], ["f1"], kind="svm")
 
 
+def test_ordinal_codes_come_from_the_taxonomy_in_ladder_order():
+    from kubrick import taxonomy
+
+    s = taxonomy.load()["scale"]
+    assert [s["cinescale_codes"][str(c)] for c in scale.ORDINAL] == s["ordinal"]
+    assert set(scale.THREE) == set(scale.ORDINAL)
+
+
 def test_evaluate_ignores_unlabelled_seconds():
     films = {f"f{i}": _film(i) for i in range(2)}
     films["f1"]["y"][:100] = -1

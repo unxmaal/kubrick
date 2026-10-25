@@ -91,7 +91,14 @@ def map_labels(labels: np.ndarray, n_ours: int, speed: float, offset: int) -> np
     return out
 
 
-ORDINAL = (1, 2, 3, 4, 5, 6, 7)  # ECU..ELS; FS (0) and INS (8) are not on the scale
+def _ordinal_codes() -> tuple[int, ...]:
+    """CineScale codes of the scales on the ordinal ladder (ECU..ELS), in ladder order, from taxonomy.toml."""
+    s = taxonomy.load()["scale"]
+    by_name = {v: int(k) for k, v in s["cinescale_codes"].items()}
+    return tuple(by_name[name] for name in s["ordinal"])
+
+
+ORDINAL = _ordinal_codes()  # FS and INS are not on the ladder
 MIN_Z = 8.0  # alignment must beat shuffled label-change times by this many sd to be used
 
 
