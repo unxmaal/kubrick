@@ -70,6 +70,11 @@ def parser() -> argparse.ArgumentParser:
     sc.add_argument("--pr-body-file", type=Path, required=True)
     sc.add_argument("--tests", type=Path, default=Path("tests"))
     sc.add_argument("--repo")
+    lm = sub.add_parser("lora-merge", help="bake a LoRA into a copy of a sharded safetensors checkpoint (#17)")
+    lm.add_argument("adapter", type=Path)
+    lm.add_argument("checkpoint", type=Path)
+    lm.add_argument("out", type=Path)
+    lm.add_argument("--scale", type=float, default=1.0)
     pn = sub.add_parser("panels", help="checked storyboard panels for every shot Eric has not sketched (#29)")
     pn.add_argument("project", type=Path)
     pn.add_argument("--model", help="soh image engine spec, e.g. mflux:z-image-turbo")
@@ -113,6 +118,12 @@ def run(a: argparse.Namespace) -> int:
         for name, d in r["directors"].items():
             print(json.dumps({"director": name, **d}))
         print(json.dumps({k: v for k, v in r.items() if k != "directors"}))
+        return 0
+
+    if a.cmd == "lora-merge":
+        from kubrick import lora
+
+        print(json.dumps(lora.merge(a.adapter, a.checkpoint, a.out, a.scale)))
         return 0
 
     if a.cmd == "panels":

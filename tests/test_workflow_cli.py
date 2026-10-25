@@ -131,3 +131,16 @@ def test_cli_panels_draws_unsketched_shots_with_the_project_style_and_model(tmp_
     assert seen["model"] == "mflux:z-image-turbo" and all(p.startswith("PENCIL. Shot 1B") for p in seen["prompts"])
     rows = [_json.loads(l) for l in capsys.readouterr().out.splitlines()]
     assert [r["shot"] for r in rows] == ["1B"] and not rows[0]["flagged"]
+
+
+def test_cli_lora_merge_writes_the_merged_checkpoint_at_the_given_scale(tmp_path, capsys):
+    import json as _json
+
+    from test_lora_merge import adapter, checkpoint
+
+    from kubrick.cli import main
+
+    d, _, _ = checkpoint(tmp_path)
+    p, _, _ = adapter(tmp_path)
+    assert main(["lora-merge", str(p), str(d), str(tmp_path / "out"), "--scale", "0.7"]) == 0
+    assert _json.loads(capsys.readouterr().out) == {"layers": 1, "shards_written": 1, "scale": 0.7}
