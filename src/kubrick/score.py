@@ -15,6 +15,9 @@ def score(truth: dict, predicted: list[int], tol: int = 2) -> dict:
             unmatched.remove(hit)
     on_negative = [p for p in unmatched
                    if any(n["first"] - tol <= p <= n["last"] + tol for n in truth["negatives"])]
+    # planted negatives are far denser than in real films, so report them as a share, not a rate
+    triggered = [n for n in truth["negatives"]
+                 if any(n["first"] - tol <= p <= n["last"] + tol for p in unmatched)]
     tp = sum(v["tp"] for v in per.values())
     fn = sum(v["fn"] for v in per.values())
     fp = len(unmatched)
@@ -33,6 +36,7 @@ def score(truth: dict, predicted: list[int], tol: int = 2) -> dict:
         "recall": recall,
         "false": fp,
         "false_on_negatives": len(on_negative),
-        "false_on_negatives_per_10min": len(on_negative) / minutes * 10 if minutes else None,
+        "negatives_triggered": len(triggered) / len(truth["negatives"]) if truth["negatives"] else None,
+        "false_elsewhere_per_10min": (fp - len(on_negative)) / minutes * 10 if minutes else None,
         "cut_f1": 2 * cut_p * cut_r / (cut_p + cut_r) if cut_p and cut_r else 0.0,
     }

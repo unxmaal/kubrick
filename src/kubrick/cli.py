@@ -22,6 +22,8 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("video")
     c.add_argument("--detector", choices=cuts.DETECTORS, default="content")
     c.add_argument("--threshold", type=float)
+    c.add_argument("--flash-guard", type=float)
+    c.add_argument("--min-len", type=int)
     w = sub.add_parser("sweep", help="score every detector across its registered thresholds")
     w.add_argument("video", type=Path)
     a = p.parse_args(argv)
@@ -33,18 +35,21 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"frames": t["frames"], "transitions": len(t["transitions"]),
                           "negatives": len(t["negatives"])}))
     elif a.cmd == "cuts":
-        print(json.dumps(cuts.detect(a.video, a.detector, a.threshold)))
+        print(json.dumps(cuts.detect(a.video, a.detector, a.threshold, a.min_len, a.flash_guard)))
     elif a.cmd == "sweep":
         truth = json.loads(a.video.with_suffix(".truth.json").read_text())
+        video = str(a.video)
         for name, knob in cuts.DETECTORS.items():
             for t in knob.sweep:
-                r = score(truth, cuts.detect(str(a.video), name, t))
-                per = r["per_kind"]
-                print(json.dumps({"detector": name, "threshold": t, "cut_f1": round(r["cut_f1"], 3),
-                                  **{f"{k}_recall": round(v["recall"], 3) for k, v in per.items()},
-                                  "false": r["false"],
-                                  "neg_per_10min": round(r["false_on_negatives_per_10min"], 2)}),
-                      flush=True)
+                raw = cuts.detect(video, name, t, min_len=1, flash_guard=0)
+                for g in cuts.FLASH_GUARD.sweep:
+                    found = cuts._min_len(cuts._drop_flashes(video, raw, g) if g else raw, cuts.MIN_LEN.default)
+                    r = score(truth, found)
+                    print(json.dumps({
+                        "detector": name, "threshold": t, "flash_guard": g, "cut_f1": round(r["cut_f1"], 3),
+                        **{f"{k}_recall": round(v["recall"], 3) for k, v in r["per_kind"].items()},
+                        "false": r["false"], "negatives_triggered": round(r["negatives_triggered"], 3),
+                        "false_elsewhere_per_10min": round(r["false_elsewhere_per_10min"], 2)}), flush=True)
     return 0
 
 

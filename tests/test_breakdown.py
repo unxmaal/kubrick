@@ -75,13 +75,43 @@ def test_score_counts_a_missed_dissolve():
 def test_score_charges_a_flash_detection_to_negatives():
     r = score(TRUTH, [100, 305, 500])
     assert r["false"] == 1 and r["false_on_negatives"] == 1
-    assert r["false_on_negatives_per_10min"] == pytest.approx(6.0)
+    assert r["negatives_triggered"] == 1.0
+    assert r["false_elsewhere_per_10min"] == 0
+
+
+def test_score_rates_false_cuts_away_from_negatives():
+    r = score(TRUTH, [100, 305, 1200])
+    assert r["negatives_triggered"] == 0.0
+    assert r["false_elsewhere_per_10min"] == pytest.approx(6.0)
+
+
+def test_flash_guard_drops_a_planted_flash_and_keeps_the_cut_after_it(tmp_path):
+    segs = [{"source": A, "frames": 48, "flash": [38, 39]}, {"source": B, "frames": 48}]
+    s = synth.Spec.from_dict({"segments": segs, "joins": [{"kind": "cut"}]})
+    out = tmp_path / "f.mp4"
+    synth.build(s, out)
+    assert 38 in cuts.detect(str(out), "framejump", 20, flash_guard=0, min_len=1)
+    assert cuts.detect(str(out), "framejump", 20, flash_guard=10) == [48]
 
 
 def test_one_prediction_matches_one_transition():
     t = {**TRUTH, "transitions": [{"kind": "cut", "first": 100, "last": 100},
                                   {"kind": "cut", "first": 102, "last": 102}]}
     assert score(t, [101])["recall"] == 0.5
+
+
+def test_cli_cuts_applies_the_flash_guard_and_min_len_it_is_given(tmp_path, capsys):
+    from kubrick.cli import main
+
+    segs = [{"source": A, "frames": 48, "flash": [38, 39]}, {"source": B, "frames": 48}]
+    out = tmp_path / "f.mp4"
+    synth.build(synth.Spec.from_dict({"segments": segs, "joins": [{"kind": "cut"}]}), out)
+    base = ["cuts", str(out), "--detector", "framejump", "--threshold", "20"]
+    main(base + ["--min-len", "1"])
+    unguarded = json.loads(capsys.readouterr().out)
+    main(base + ["--flash-guard", "10"])
+    guarded = json.loads(capsys.readouterr().out)
+    assert 38 in unguarded and guarded == [48]
 
 
 def test_unknown_label_is_kept_not_mapped():
