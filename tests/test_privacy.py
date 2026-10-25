@@ -4,7 +4,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 # built from parts so this file does not match itself
-LIBRARY = re.compile("|".join(map(re.escape, ["/Volumes/" + "Media", "Videos/" + "Movies"])), re.IGNORECASE)
+PATHS = ["/Volumes/" + "Media", "Videos/" + "Movies"]
+LIBRARY = re.compile("|".join(map(re.escape, PATHS)), re.IGNORECASE)
 
 
 def library_leaks(repo: Path) -> list[str]:
@@ -36,11 +37,11 @@ def test_the_repo_never_names_the_film_library():
 
 
 def test_a_tracked_file_naming_the_library_is_caught(tmp_path):
-    assert library_leaks(repo_with(tmp_path, "films are under /volumes/media/x\n")) == ["notes.md"]
+    assert library_leaks(repo_with(tmp_path, f"films are under {PATHS[0].lower()}/x\n")) == ["notes.md"]
 
 
 def test_a_commit_message_naming_the_library_is_caught(tmp_path):
-    found = library_leaks(repo_with(tmp_path, "nothing here\n", "read from Videos/Movies"))
+    found = library_leaks(repo_with(tmp_path, "nothing here\n", f"read from {PATHS[1]}"))
     assert len(found) == 1 and found[0].startswith("commit ")
 
 
