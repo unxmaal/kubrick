@@ -104,6 +104,13 @@ def test_validation_up_to_the_floor_plan_passes_before_the_storyboard_exists(tmp
     assert any("storyboard.json: missing" in e for e in stages.validate_project(tmp_path))
 
 
+def test_a_text_card_panel_is_recorded_as_a_card(tmp_path):
+    # conformance run 2: cards were recorded as "generated", so the storyboard could not tell them from stills
+    docs = project()
+    docs["storyboard.json"]["panels"][0]["source"] = "card"
+    assert stages.validate_project(write(tmp_path, docs)) == []
+
+
 def test_the_breakdown_records_model_tests_with_a_known_result(tmp_path):
     docs = project()
     docs["breakdown.json"]["scenes"][0]["model_tests"] = [{"detail": "cap pulled low", "result": "untested"}]

@@ -56,7 +56,7 @@ def schemas() -> dict[str, dict]:
             "type": "array", "minItems": 1, "items": {
                 "type": "object", "required": ["shot", "image", "source"],
                 "properties": {"shot": {"type": "string"}, "image": {"type": "string"},
-                               "source": {"enum": ["generated", "sketch"]}}}}}},
+                               "source": {"enum": ["generated", "sketch", "card"]}}}}}},
     }
 
 
