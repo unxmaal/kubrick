@@ -76,7 +76,7 @@ def _drop_flashes(path: str, found: list[int], guard: float, span: int | None = 
 
 def thumbnails(path: str, w: int = 64, h: int = 36) -> np.ndarray:
     raw = subprocess.run(
-        ["ffmpeg", "-hide_banner", "-loglevel", "error", "-i", path, "-vf", f"scale={w}:{h}",
+        ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-i", path, "-vf", f"scale={w}:{h}",
          "-pix_fmt", "gray", "-f", "rawvideo", "-"], check=True, capture_output=True).stdout
     return np.frombuffer(raw, np.uint8).reshape(-1, h, w).astype(np.int16)
 
@@ -90,7 +90,7 @@ def transnet_probs(path: str) -> tuple[np.ndarray, np.ndarray]:
     from transnetv2_pytorch import TransNetV2
 
     raw = subprocess.run(
-        ["ffmpeg", "-hide_banner", "-loglevel", "error", "-i", path, "-vf", "scale=48:27",
+        ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-i", path, "-vf", "scale=48:27",
          "-pix_fmt", "rgb24", "-f", "rawvideo", "-"], check=True, capture_output=True).stdout
     frames = torch.from_numpy(np.frombuffer(raw, np.uint8).reshape(-1, 27, 48, 3).copy())
     model = TransNetV2(device="cpu")

@@ -26,7 +26,16 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--min-len", type=int)
     w = sub.add_parser("sweep", help="score every detector across its registered thresholds")
     w.add_argument("video", type=Path)
+    f = sub.add_parser("features", help="per-second image features and thumbnails (.npz)")
+    f.add_argument("video")
+    f.add_argument("out", type=Path)
     a = p.parse_args(argv)
+
+    if a.cmd == "features":
+        from kubrick import scale
+
+        scale.featurise(a.video, a.out)
+        return 0
 
     if a.cmd == "synth":
         synth.build(synth.Spec.from_dict(json.loads(a.spec.read_text())), a.out)

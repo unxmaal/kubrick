@@ -108,7 +108,7 @@ def build(spec: Spec, out: Path) -> dict:
             )
             length += spec.segments[i].frames - join.frames
         cur = label
-    cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", *_inputs(spec),
+    cmd = ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-y", *_inputs(spec),
            "-filter_complex", ";".join(graph), "-map", f"[{cur}]", "-an",
            "-c:v", "libx264", "-crf", "18", "-pix_fmt", "yuv420p", str(out)]
     subprocess.run(cmd, check=True)
