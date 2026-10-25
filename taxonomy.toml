@@ -1,0 +1,12 @@
+[scale]
+source = "CineScale, Savardi et al., Data in Brief 2021, DOI 10.17632/th46h4vdwd.1"
+labels = ["ECU", "CU", "MCU", "MS", "MLS", "LS", "ELS", "FS", "INS"]
+# CineScale's integer codes, from its README
+cinescale_codes = { 0 = "FS", 1 = "ECU", 2 = "CU", 3 = "MCU", 4 = "MS", 5 = "MLS", 6 = "LS", 7 = "ELS", 8 = "INS" }
+ordinal = ["ECU", "CU", "MCU", "MS", "MLS", "LS", "ELS"]
+
+[movement]
+labels = ["static", "pan", "tilt", "push", "pull", "handheld"]
+
+[transition]
+labels = ["cut", "dissolve", "fade"]
