@@ -82,6 +82,31 @@ def test_evaluate_scores_a_learnable_signal_far_above_every_shuffled_control():
     assert ceiling < 0.5
 
 
+def test_boost_uses_pose_features_when_image_features_are_noise():
+    rng = np.random.default_rng(3)
+    films = {}
+    for i in range(3):
+        y = rng.integers(1, 8, 500)
+        films[f"f{i}"] = {"X": rng.normal(size=(500, 80)), "pose": np.eye(8)[y] + rng.normal(0, 0.2, (500, 8)), "y": y}
+    with_pose = scale.evaluate(films, ["f0", "f1"], ["f2"], kind="boost")["f2"]["kappa_linear"]
+    for f in films.values():
+        del f["pose"]
+    without = scale.evaluate(films, ["f0", "f1"], ["f2"], kind="boost")["f2"]["kappa_linear"]
+    assert with_pose > 0.8 and without < 0.2
+
+
+def test_evaluate_shuffles_training_labels_only():
+    films = {f"f{i}": _film(i) for i in range(3)}
+    r = scale.evaluate(films, ["f0", "f1"], ["f2"], shuffle=True)["f2"]
+    assert r["n"] == 600
+
+
+def test_evaluate_refuses_an_unknown_classifier():
+    films = {f"f{i}": _film(i) for i in range(2)}
+    with pytest.raises(ValueError, match="unknown classifier"):
+        scale.evaluate(films, ["f0"], ["f1"], kind="svm")
+
+
 def test_evaluate_ignores_unlabelled_seconds():
     films = {f"f{i}": _film(i) for i in range(2)}
     films["f1"]["y"][:100] = -1

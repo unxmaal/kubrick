@@ -133,39 +133,73 @@ def load_film(npz: Path, csv_path: Path) -> dict:
     return {"X": d["feats"], "y": y, "align": a, "features": features}
 
 
-def evaluate(films: dict[str, dict], train: list[str], test: list[str], shuffle: bool = False,
-             seed: int = 0) -> dict:
+PCA_DIMS = 64  # image features reduced before boosting; pose features are appended whole
+THREE = {1: 0, 2: 0, 3: 0, 4: 1, 5: 1, 6: 2, 7: 2}  # close / medium / long, as in CineScale's earlier work
+
+
+def _classifier(kind: str):
+    from sklearn.decomposition import PCA
+    from sklearn.ensemble import HistGradientBoostingClassifier
     from sklearn.linear_model import LogisticRegression
-    from sklearn.metrics import accuracy_score, cohen_kappa_score
     from sklearn.pipeline import make_pipeline
     from sklearn.preprocessing import StandardScaler
+
+    if kind == "linear":
+        return make_pipeline(StandardScaler(), LogisticRegression(max_iter=2000, C=0.1))
+    if kind == "boost":
+        return HistGradientBoostingClassifier(max_iter=300, learning_rate=0.08, random_state=0), \
+            PCA(PCA_DIMS, random_state=0)
+    raise ValueError(f"unknown classifier {kind!r}")
+
+
+def evaluate(films: dict[str, dict], train: list[str], test: list[str], shuffle: bool = False,
+             seed: int = 0, kind: str = "linear") -> dict:
+    """Train on `train`, score each of `test`. A film may carry "pose" features, appended to the image
+    features (linear) or to their PCA reduction (boost)."""
+    from sklearn.metrics import accuracy_score, cohen_kappa_score
 
     configs = {films[n].get("features") for n in train + test}
     if len(configs) > 1:
         raise ValueError(f"films carry different feature configurations: {sorted(map(str, configs))}")
     rng = np.random.default_rng(seed)
 
-    def xy(names):
-        X, y = [], []
+    model = _classifier(kind)
+    clf, pca = model if isinstance(model, tuple) else (model, None)
+
+    def raw(names):
+        X, P, y = [], [], []
         for n in names:
             m = films[n]["y"] >= 0
-            yy = films[n]["y"][m]
             X.append(films[n]["X"][m])
+            P.append(films[n]["pose"][m] if "pose" in films[n] else np.zeros((m.sum(), 0)))
+            yy = films[n]["y"][m]
             y.append(rng.permutation(yy) if shuffle else yy)
-        return np.concatenate(X), np.concatenate(y)
+        return np.concatenate(X), np.concatenate(P), np.concatenate(y)
 
-    Xtr, ytr = xy(train)
-    clf = make_pipeline(StandardScaler(), LogisticRegression(max_iter=2000, C=0.1))
-    clf.fit(Xtr, ytr)
+    def feats(X, P):
+        return np.hstack([pca.transform(X) if pca is not None else X, P])
+
+    Xtr, Ptr, ytr = raw(train)
+    if pca is not None:
+        pca.fit(Xtr)
+    clf.fit(feats(Xtr, Ptr), ytr)
     out = {}
     for n in test:
-        m = films[n]["y"] >= 0
-        y, p = films[n]["y"][m], clf.predict(films[n]["X"][m])
+        X, P, y = _unshuffled(films[n])  # only training labels are ever shuffled
+        p = clf.predict(feats(X, P))
         o = np.isin(y, ORDINAL) & np.isin(p, ORDINAL)
-        out[n] = {"n": int(m.sum()), "accuracy": float(accuracy_score(y, p)),
+        t = np.isin(y, list(THREE)) & np.isin(p, list(THREE))
+        out[n] = {"n": len(y), "accuracy": float(accuracy_score(y, p)),
                   "kappa_linear": float(cohen_kappa_score(y[o], p[o], weights="linear")),
-                  "within_one": float(np.mean(np.abs(y[o] - p[o]) <= 1))}
+                  "within_one": float(np.mean(np.abs(y[o] - p[o]) <= 1)),
+                  "three_class_accuracy": float(np.mean([THREE[a] == THREE[b] for a, b in zip(y[t], p[t])]))}
     return out
+
+
+def _unshuffled(film: dict):
+    m = film["y"] >= 0
+    P = film["pose"][m] if "pose" in film else np.zeros((m.sum(), 0))
+    return film["X"][m], P, film["y"][m]
 
 
 GRID = 4  # patch tokens pooled to GRID x GRID cells; 0 keeps CLS + mean only
