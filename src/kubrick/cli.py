@@ -20,7 +20,7 @@ def main(argv: list[str] | None = None) -> int:
     k.add_argument("--seed", type=int, default=0)
     c = sub.add_parser("cuts", help="detect cuts")
     c.add_argument("video")
-    c.add_argument("--detector", choices=cuts.DETECTORS, default="content")
+    c.add_argument("--detector", choices=cuts.DETECTORS, default="adaptive")
     c.add_argument("--threshold", type=float)
     c.add_argument("--flash-guard", type=float)
     c.add_argument("--min-len", type=int)

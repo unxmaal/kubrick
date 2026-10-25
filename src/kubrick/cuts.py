@@ -14,11 +14,11 @@ class Knob:
 
 DETECTORS = {
     "content": Knob(27.0, (15, 20, 24, 27, 30, 35, 40)),
-    "adaptive": Knob(3.0, (1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0)),
+    "adaptive": Knob(3.5, (1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0)),  # chosen on known set seed 0, confirmed seed 1
     "framejump": Knob(33.0, (15, 20, 25, 33, 40, 50)),  # Chris's thumbnail heuristic
 }
 # a candidate cut whose frames FLASH_SPAN either side still match (mean abs diff below this) is a flash
-FLASH_GUARD = Knob(0.0, (0, 6, 10, 15, 20))
+FLASH_GUARD = Knob(6.0, (0, 6, 10, 15, 20))
 FLASH_SPAN = Knob(4, (2, 3, 4, 6))
 MIN_LEN = Knob(8, (1, 4, 8, 12))
 

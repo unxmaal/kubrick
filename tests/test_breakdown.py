@@ -107,7 +107,7 @@ def test_cli_cuts_applies_the_flash_guard_and_min_len_it_is_given(tmp_path, caps
     out = tmp_path / "f.mp4"
     synth.build(synth.Spec.from_dict({"segments": segs, "joins": [{"kind": "cut"}]}), out)
     base = ["cuts", str(out), "--detector", "framejump", "--threshold", "20"]
-    main(base + ["--min-len", "1"])
+    main(base + ["--min-len", "1", "--flash-guard", "0"])
     unguarded = json.loads(capsys.readouterr().out)
     main(base + ["--flash-guard", "10"])
     guarded = json.loads(capsys.readouterr().out)
