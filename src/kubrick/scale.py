@@ -24,15 +24,20 @@ def read_cinescale(path: Path) -> np.ndarray:
     return np.array(codes)
 
 
-def sample_frames(path: str, fps: float = 1.0):
-    """Yield (second, RGB frame of height H) at `fps`, decoded in one pass."""
+def frame_size(path: str) -> tuple[int, int]:
+    """(width, H) at the film's display aspect: what the scale model is trained on and must be shown."""
     probe = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
                             "stream=width,height,sample_aspect_ratio", "-of", "csv=p=0", path],
                            capture_output=True, text=True, check=True).stdout.strip().split(",")
     w, h = int(probe[0]), int(probe[1])
     sar = probe[2] if len(probe) > 2 and ":" in probe[2] else "1:1"
     num, den = (int(x) for x in sar.split(":"))
-    width = int(round(w * num / den / h * H / 2)) * 2
+    return int(round(w * num / den / h * H / 2)) * 2, H
+
+
+def sample_frames(path: str, fps: float = 1.0):
+    """Yield (second, RGB frame of height H) at `fps`, decoded in one pass."""
+    width, _ = frame_size(path)
     proc = subprocess.Popen(
         ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-i", path, "-vf",
          f"fps={fps},scale={width}:{H},setsar=1", "-pix_fmt", "rgb24", "-f", "rawvideo", "-"],
@@ -165,35 +170,12 @@ def evaluate(films: dict[str, dict], train: list[str], test: list[str], shuffle:
     features (linear) or to their PCA reduction (boost)."""
     from sklearn.metrics import accuracy_score, cohen_kappa_score
 
-    configs = {films[n].get("features") for n in train + test}
-    if len(configs) > 1:
-        raise ValueError(f"films carry different feature configurations: {sorted(map(str, configs))}")
-    rng = np.random.default_rng(seed)
-
-    model = _classifier(kind)
-    clf, pca = model if isinstance(model, tuple) else (model, None)
-
-    def raw(names):
-        X, P, y = [], [], []
-        for n in names:
-            m = films[n]["y"] >= 0
-            X.append(films[n]["X"][m])
-            P.append(films[n]["pose"][m] if "pose" in films[n] else np.zeros((m.sum(), 0)))
-            yy = films[n]["y"][m]
-            y.append(rng.permutation(yy) if shuffle else yy)
-        return np.concatenate(X), np.concatenate(P), np.concatenate(y)
-
-    def feats(X, P):
-        return np.hstack([pca.transform(X) if pca is not None else X, P])
-
-    Xtr, Ptr, ytr = raw(train)
-    if pca is not None:
-        pca.fit(Xtr)
-    clf.fit(feats(Xtr, Ptr), ytr)
+    _one_configuration(films, train + test)
+    clf, pca = _fit(films, train, kind, np.random.default_rng(seed) if shuffle else None)
     out = {}
     for n in test:
         X, P, y = _unshuffled(films[n])  # only training labels are ever shuffled
-        p = clf.predict(feats(X, P))
+        p = clf.predict(_features(pca, X, P))
         o = np.isin(y, ORDINAL) & np.isin(p, ORDINAL)
         t = np.isin(y, list(THREE)) & np.isin(p, list(THREE))
         out[n] = {"n": len(y), "accuracy": float(accuracy_score(y, p)),
@@ -207,6 +189,63 @@ def _unshuffled(film: dict):
     m = film["y"] >= 0
     P = film["pose"][m] if "pose" in film else np.zeros((m.sum(), 0))
     return film["X"][m], P, film["y"][m]
+
+
+def _one_configuration(films: dict[str, dict], names: list[str]) -> tuple:
+    configs = {films[n].get("features") for n in names}
+    if len(configs) > 1:
+        raise ValueError(f"films carry different feature configurations: {sorted(map(str, configs))}")
+    return next(iter(configs))
+
+
+def _features(pca, X: np.ndarray, P: np.ndarray) -> np.ndarray:
+    return np.hstack([pca.transform(X) if pca is not None else X, P])
+
+
+def _fit(films: dict[str, dict], names: list[str], kind: str, shuffle_rng=None):
+    """The one place a shot-scale classifier is fitted, for evaluation and for the saved model alike."""
+    model = _classifier(kind)
+    clf, pca = model if isinstance(model, tuple) else (model, None)
+    parts = [_unshuffled(films[n]) for n in names]
+    X, P = np.concatenate([p[0] for p in parts]), np.concatenate([p[1] for p in parts])
+    y = np.concatenate([shuffle_rng.permutation(p[2]) if shuffle_rng is not None else p[2] for p in parts])
+    if pca is not None:
+        pca.fit(X)
+    clf.fit(_features(pca, X, P), y)
+    return clf, pca
+
+
+def train_model(films: dict[str, dict], kind: str = "boost") -> dict:
+    names = sorted(films)
+    features = _one_configuration(films, names)
+    clf, pca = _fit(films, names, kind)
+    return {"clf": clf, "pca": pca, "features": features, "kind": kind, "trained_on": names,
+            "pose": all("pose" in films[n] for n in names)}
+
+
+def save_model(model: dict, path: Path) -> None:
+    import joblib
+
+    joblib.dump(model, path)
+
+
+def load_model(path: Path) -> dict:
+    import joblib
+
+    return joblib.load(path)
+
+
+def predict_frame(model: dict, frame: np.ndarray, _embedders: dict = {}) -> str:
+    """Taxonomy label for one RGB frame, using the features the model was trained on."""
+    from kubrick import pose
+
+    key = model["features"]
+    if key not in _embedders:
+        _embedders[key] = Embedder(key[0], grid=key[1])
+    X = _embedders[key]([frame])
+    P = pose.features(frame)[None, :] if model["pose"] else np.zeros((1, 0))
+    code = int(model["clf"].predict(_features(model["pca"], X, P))[0])
+    return taxonomy.load()["scale"]["cinescale_codes"].get(str(code), f"unknown:code-{code}")
 
 
 GRID = 4  # patch tokens pooled to GRID x GRID cells; 0 keeps CLS + mean only

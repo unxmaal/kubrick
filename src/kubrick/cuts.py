@@ -120,18 +120,34 @@ def close_gaps(above: np.ndarray, gap: int) -> np.ndarray:
     return above
 
 
-def _run_ends(above: np.ndarray) -> list[int]:
-    """A short run is a cut: the first frame after it. A long run is a gradual transition: its midpoint,
-    because the span head stays high a frame or two past the transition's last frame."""
+def _runs(above: np.ndarray) -> list[dict]:
+    """Each closed run of above-threshold frames as a transition. A short run is a cut, placed at the first
+    frame after it. A long run is gradual, placed at its midpoint, because the span head stays high a frame
+    or two past the transition's last frame."""
     out, start = [], None
     for i in range(len(above)):
         if above[i] and start is None:
             start = i
         elif not above[i] and start is not None:
             if start > 0:
-                out.append(i if i - start <= CUT_RUN.default else (start + i) // 2)
+                cut = i - start <= CUT_RUN.default
+                out.append({"at": i if cut else (start + i) // 2, "kind": "cut" if cut else "gradual",
+                            "first": start, "last": i - 1})
             start = None
     return out
+
+
+def _run_ends(above: np.ndarray) -> list[int]:
+    return [r["at"] for r in _runs(above)]
+
+
+def transitions(path: str, threshold: float | None = None, min_len: int | None = None) -> list[dict]:
+    """TransNetV2 transitions with kind and frame span, after the same gap closing and min_len as detect."""
+    single, span = transnet_probs(path)
+    t = DETECTORS["transnet"].default if threshold is None else threshold
+    runs = _runs(close_gaps((single > t) | (span > TRANSNET_SPAN.default), GAP_CLOSE.default))
+    kept = set(_min_len([r["at"] for r in runs], MIN_LEN.default if min_len is None else min_len))
+    return [r for r in runs if r["at"] in kept]
 
 
 def _framejump(path: str, threshold: float) -> list[int]:

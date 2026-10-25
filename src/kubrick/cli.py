@@ -38,7 +38,41 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("films", nargs="+", help="features.npz:labels.csv[:pose.npz] per film")
     e.add_argument("--kind", choices=("linear", "boost"), default="boost")
     e.add_argument("--shuffles", type=int, default=2)
+    b = sub.add_parser("breakdown", help="one row per shot (rows.jsonl) plus frame grabs")
+    b.add_argument("video")
+    b.add_argument("out_dir", type=Path)
+    b.add_argument("--scale-model", type=Path)
+    t = sub.add_parser("scale-train", help="train and save the shot-scale model on aligned films")
+    t.add_argument("films", nargs="+", help="features.npz:labels.csv[:pose.npz] per film")
+    t.add_argument("--out", type=Path, required=True)
+    t.add_argument("--kind", choices=("linear", "boost"), default="boost")
     a = p.parse_args(argv)
+
+    if a.cmd == "breakdown":
+        from kubrick import breakdown
+
+        rows = breakdown.breakdown(a.video, a.out_dir, a.scale_model)
+        breakdown.write_jsonl(rows, a.out_dir / "rows.jsonl")
+        print(json.dumps({"shots": len(rows), "rows": str(a.out_dir / "rows.jsonl")}))
+        return 0
+
+    if a.cmd == "scale-train":
+        import numpy as np
+
+        from kubrick import scale
+
+        films = {}
+        for spec in a.films:
+            parts = spec.split(":")
+            film = scale.load_film(Path(parts[0]), Path(parts[1]))
+            if len(parts) > 2:
+                film["pose"] = np.load(parts[2])["pose"]
+            if film["align"]["accepted"]:
+                films[Path(parts[0]).stem] = film
+        model = scale.train_model(films, a.kind)
+        scale.save_model(model, a.out)
+        print(json.dumps({"trained_on": model["trained_on"], "features": list(model["features"]), "out": str(a.out)}))
+        return 0
 
     if a.cmd == "scale-eval":
         import numpy as np
