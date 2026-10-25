@@ -111,3 +111,33 @@ def predict(model: dict, X: np.ndarray, batch: int = 64) -> np.ndarray:
             h = model["body"](_batch(X[k:k + batch], model["size"], model["device"], False, None))
             out.append(model["head"](torch.cat([h[:, 0], h.mean(1)], 1)).argmax(1).cpu().numpy())
     return model["codes"][np.concatenate(out)] if out else np.array([], int)
+
+
+def leave_one_out(films: dict[str, dict], frames: dict[str, np.ndarray], cuts: dict[str, dict], epochs: int = 3,
+                  stride: int = 2, shuffle: bool = False, draws: int = 100, boots: int = 200, log=None) -> dict:
+    """Fine-tune on the other films (every `stride`-th labelled second), label the held-out film, and return
+    per-film kappa beside fitness.leave_one_out_with's per-rule verdicts. `shuffle` permutes training labels."""
+    from sklearn.metrics import cohen_kappa_score
+
+    from kubrick import fitness, scale
+
+    kappa = {}
+
+    def fit_predict(others, test):
+        idx = {n: np.flatnonzero(films[n]["y"] >= 0)[::stride] for n in others}
+        X = np.concatenate([frames[n][idx[n]] for n in others])
+        y = np.concatenate([films[n]["y"][idx[n]] for n in others])
+        if shuffle:
+            y = np.random.default_rng(0).permutation(y)
+        model = train(X, y, epochs=epochs, log=log)
+        m = np.flatnonzero(films[test]["y"] >= 0)
+        pred = np.full(len(films[test]["y"]), -1)
+        pred[m] = predict(model, frames[test][m])
+        t, p = films[test]["y"][m], pred[m]
+        o = np.isin(t, scale.ORDINAL) & np.isin(p, scale.ORDINAL)
+        kappa[test] = {"kappa_linear": float(cohen_kappa_score(t[o], p[o], weights="linear")),
+                       "within_one": float(np.mean(np.abs(t[o] - p[o]) <= 1)), "accuracy": float(np.mean(t == p))}
+        return pred
+
+    fit = fitness.leave_one_out_with(films, cuts, fit_predict, draws=draws, boots=boots)
+    return {n: {**kappa[n], "fitness": fit[n]} for n in films}

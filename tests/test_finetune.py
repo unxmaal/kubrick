@@ -100,3 +100,48 @@ def test_an_unlabelled_second_never_gets_a_prediction_counted():
     fit = lambda train, test: np.where(films[test]["y"] >= 0, films[test]["y"], 7)
     out = fitness.leave_one_out_with(films, cuts, fit, draws=20, boots=20)
     assert all(v["fit"] for rules in out.values() for v in rules.values())
+
+
+def test_cli_scale_finetune_reports_kappa_and_fitness_per_film_and_skips_unaligned(tmp_path, monkeypatch, capsys):
+    import json
+
+    from kubrick import scale
+    from kubrick.cli import main
+
+    films, cuts = walk_films(("a", "b", "c"))
+    trained = []
+    specs = []
+    for n in ("a", "b", "c"):
+        np.save(tmp_path / f"{n}.npy", np.zeros((len(films[n]["y"]), 8, 8, 3), np.uint8))
+        (tmp_path / f"{n}.json").write_text(json.dumps(cuts[n]))
+        specs.append(f"{tmp_path}/{n}.npz:{n}.csv:{tmp_path}/{n}.npy:{tmp_path}/{n}.json")
+    loaded = {n: {"y": films[n]["y"], "align": {"accepted": n != "c"}} for n in films}
+    monkeypatch.setattr(scale, "load_film", lambda npz, csv: dict(loaded[npz.stem]))
+    monkeypatch.setattr(finetune, "train", lambda X, y, **kw: trained.append((len(X), kw)) or {"y": y})
+    # the stub "model" predicts the right answer from the test film's own labels
+    current = {}
+    monkeypatch.setattr(finetune, "predict", lambda model, X: current["y"][:len(X)])
+    real = fitness.leave_one_out_with
+
+    def spy(films_, cuts_, fit_predict, **kw):
+        def fp(train, test):
+            current["y"] = films_[test]["y"][films_[test]["y"] >= 0]
+            return fit_predict(train, test)
+        return real(films_, cuts_, fp, **kw)
+
+    monkeypatch.setattr(fitness, "leave_one_out_with", spy)
+    assert main(["scale-finetune", *specs, "--epochs", "2", "--stride", "3", "--draws", "10", "--boots", "10"]) == 0
+    rows = [json.loads(l) for l in capsys.readouterr().out.splitlines()]
+    tests = {r["test"]: r for r in rows if "test" in r}
+    assert set(tests) == {"a", "b"} and all(r["kappa_linear"] == 1.0 for r in tests.values())
+    assert all(set(r["fitness"]) == {"one-step-scale-cuts", "wide-then-closer"} for r in tests.values())
+    assert all(kw["epochs"] == 2 for _, kw in trained)
+    assert trained[0][0] == len(np.flatnonzero(films["b"]["y"] >= 0)[::3])  # trained on the other aligned film only
+
+
+def test_cli_frames_writes_one_square_frame_per_second(tmp_path):
+    from kubrick.cli import main
+
+    video(tmp_path / "v.mp4", [20, 200, 90])
+    assert main(["frames", str(tmp_path / "v.mp4"), str(tmp_path / "f.npy"), "--size", "16"]) == 0
+    assert np.load(tmp_path / "f.npy").shape == (3, 16, 16, 3)
