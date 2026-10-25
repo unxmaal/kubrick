@@ -50,25 +50,32 @@ def difference_interval(human: list[int], predicted: list[int], stat, draws: int
 
 def leave_one_out(films: dict[str, dict], cuts: dict[str, dict], kind: str = "boost", draws: int = 100,
                   boots: int = 200, seed: int = 0) -> dict[str, dict]:
-    """For each film: fit the labeller on the others (scale._fit, the path evaluate measures), label every
-    second that has a human label, and check fitness per rule over the film's own shots."""
+    """The frozen-feature labeller: fit on the other films (scale._fit, the path evaluate measures)."""
     from kubrick import scale
 
-    out = {}
-    for test in films:
-        train = [n for n in films if n != test]
-        scale._one_configuration(films, list(films))
+    scale._one_configuration(films, list(films))
+
+    def fit_predict(train, test):
         clf, pca = scale._fit(films, train, kind)
         f = films[test]
-        m = f["y"] >= 0
         P = f["pose"] if "pose" in f else np.zeros((len(f["y"]), 0))
-        pred = np.full(len(f["y"]), -1)
-        pred[m] = clf.predict(scale._features(pca, f["X"][m], P[m]))
+        return clf.predict(scale._features(pca, f["X"], P))
+
+    return leave_one_out_with(films, cuts, fit_predict, draws, boots, seed)
+
+
+def leave_one_out_with(films: dict[str, dict], cuts: dict[str, dict], fit_predict, draws: int = 100,
+                       boots: int = 200, seed: int = 0) -> dict[str, dict]:
+    """For each film, `fit_predict(other films, film)` returns a label per second; only seconds with a human
+    label count, and fitness is checked per rule over the film's own shots."""
+    out = {}
+    for test in films:
+        y = films[test]["y"]
+        pred = np.where(y >= 0, np.asarray(fit_predict([n for n in films if n != test], test)), -1)
         c = cuts[test]
         starts = [t["at"] for t in c["transitions"]]
-        human = shot_labels(f["y"], starts, c["frames"], c["fps"])
-        predicted = shot_labels(pred, starts, c["frames"], c["fps"])
-        out[test] = check(human, predicted, draws, boots, seed)
+        out[test] = check(shot_labels(y, starts, c["frames"], c["fps"]),
+                          shot_labels(pred, starts, c["frames"], c["fps"]), draws, boots, seed)
     return out
 
 
