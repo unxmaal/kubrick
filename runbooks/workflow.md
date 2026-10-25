@@ -49,7 +49,7 @@ For each scene, list its shots in order. Each shot has:
 - `wardrobe`: the state of each visible item, as the breakdown has it at this shot;
 - `vo`: the narration heard over this shot, if any.
 
-Follow `runbooks/grammar/scale.md`: open each scene wide enough to place the action (`scene-opens-wide`), and prefer cuts to the neighbouring size (`one-step-scale-cuts`). Note the rule id in the description of any shot that departs from a rule on purpose.
+Follow `runbooks/grammar/scale.md`: open each scene wide enough to place the action (`scene-opens-wide`), and prefer cuts to the neighbouring size (`one-step-scale-cuts`). Note the rule id in the description of any shot that departs from a rule on purpose. Then `runbooks/grammar/cutting.md` and `camera.md`: let narration run across picture cuts and bridge scenes with J and L cuts (`picture-leads-sound`), skip time that carries nothing (`elide-time`), use a dissolve only for a change of time or place (`scene-transitions`), alternate simultaneous strands (`cross-cutting`), and cover groups by sub-group (`group-coverage`).
 
 Check: `uv run kubrick validate <project> --until shotlist` prints `ok`.
 
