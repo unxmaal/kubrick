@@ -31,3 +31,6 @@ dev = [
 [project.scripts]
 kubrick = "kubrick.cli:main"
 
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

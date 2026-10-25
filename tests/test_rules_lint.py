@@ -91,6 +91,38 @@ def test_an_unknown_kind_fails(tmp_path):
     assert any("folklore" in e for e in rules.lint(write(tmp_path, bad)))
 
 
+PROVISIONAL = """
+## blink-cut
+- kind: provisional
+- decision: Cut a frame or two before an actor blinks.
+- applies when: A close shot of a performer.
+- check: The cut point sits just before a blink.
+- counterexample: Rhythm demands the cut elsewhere.
+- confirm: Murch, In the Blink of an Eye, when the book arrives.
+- sources:
+  - Hullfish 2020, ProVideo Coalition interview with Murch.
+"""
+
+
+def test_a_provisional_rule_may_rest_on_one_source_and_says_what_would_confirm_it(tmp_path):
+    assert rules.lint(write(tmp_path, all_enforced(GOOD) + PROVISIONAL)) == []
+    no_confirm = PROVISIONAL.replace("- confirm: Murch, In the Blink of an Eye, when the book arrives.\n", "")
+    assert any("confirm" in e for e in rules.lint(write(tmp_path, all_enforced(GOOD) + no_confirm)))
+    no_source = PROVISIONAL.replace("  - Hullfish 2020, ProVideo Coalition interview with Murch.\n", "")
+    assert any("no sources" in e for e in rules.lint(write(tmp_path, all_enforced(GOOD) + no_source)))
+
+
+def test_a_secondary_source_names_the_book_it_reports(tmp_path):
+    bad = all_enforced(GOOD) + PROVISIONAL.replace(
+        "  - Hullfish 2020, ProVideo Coalition interview with Murch.",
+        "  - secondary: UT RTF 318 course wiki, Murch's Rule of Six.")
+    assert any("secondary" in e for e in rules.lint(write(tmp_path, bad)))
+    good = all_enforced(GOOD) + PROVISIONAL.replace(
+        "  - Hullfish 2020, ProVideo Coalition interview with Murch.",
+        "  - secondary: UT RTF 318 course wiki, Murch's Rule of Six, on Murch, In the Blink of an Eye: the priorities.")
+    assert rules.lint(write(tmp_path, good)) == []
+
+
 def test_the_real_grammar_run_books_pass_the_lint():
     root = Path(__file__).resolve().parents[1] / "runbooks" / "grammar"
     assert rules.lint(root) == []
