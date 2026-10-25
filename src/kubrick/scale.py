@@ -9,7 +9,8 @@ import numpy as np
 from kubrick import taxonomy
 
 EMBED_MODEL = "facebook/dinov2-small"
-SPEEDS = (1.0, 24 / 25, 25 / 24, 1000 / 1001, 1001 / 1000)
+# film, NTSC (24000/1001) and PAL (25) ratios: 25/24 alone drifts ~3 s an hour against 23.976 -> 25
+SPEEDS = (1.0, 24 / 25, 25 / 24, 1000 / 1001, 1001 / 1000, 24000 / 25025, 25025 / 24000)
 H = 224
 
 
@@ -52,7 +53,10 @@ def change_signal(thumbs: np.ndarray) -> np.ndarray:
     return np.concatenate([[0.0], d])
 
 
-def align(labels: np.ndarray, change: np.ndarray, max_offset: int = 600) -> dict:
+MIN_MARKS = 50  # label changes a whole-film fit needs; windows pass fewer
+
+
+def align(labels: np.ndarray, change: np.ndarray, max_offset: int = 600, min_marks: int = MIN_MARKS) -> dict:
     """Find speed and offset mapping annotated second t to our second t*speed + offset.
 
     Score: mean picture change at our seconds where the human label changes. A real alignment puts
@@ -63,11 +67,14 @@ def align(labels: np.ndarray, change: np.ndarray, max_offset: int = 600) -> dict
         for o in range(-max_offset, max_offset + 1):
             ours = np.rint(marks * s + o).astype(int)
             ok = (ours > 0) & (ours < len(change))
-            if ok.sum() < 50:
+            if ok.sum() < min_marks:
                 continue
             sc = change[ours[ok]].mean()
             if sc > best["score"]:
                 best = {"score": float(sc), "speed": s, "offset": o, "marks": int(ok.sum())}
+    if "marks" not in best:
+        return {"score": None, "speed": None, "offset": None, "marks": 0, "z": float("-inf"),
+                "reason": f"fewer than {min_marks} label changes land inside the copy"}
     rng = np.random.default_rng(0)
     null = [change[rng.integers(1, len(change), best["marks"])].mean() for _ in range(200)]
     best["null_mean"], best["null_sd"] = float(np.mean(null)), float(np.std(null))
@@ -91,26 +98,37 @@ MIN_Z = 8.0  # alignment must beat shuffled label-change times by this many sd t
 HALF_OFFSET_TOLERANCE = 2  # seconds the two halves' offsets may differ by
 
 
-def check_alignment(labels: np.ndarray, change: np.ndarray) -> dict:
+def check_alignment(labels: np.ndarray, change: np.ndarray, min_marks: int = MIN_MARKS,
+                    min_z: float | None = None) -> dict:
     """Align the whole film and each half alone. A real alignment agrees with itself; a spurious one
     (a different edition, a partial copy) gives halves with different speeds or offsets."""
-    whole = align(labels, change)
-    n = min(len(labels), int(len(change) / whole["speed"]))
-    first, second = labels.copy(), labels.copy()
-    first[n // 2:] = -1
-    second[: n // 2] = -1
-    halves = [align(h, change) for h in (first, second)]
-    agree = all(h["speed"] == whole["speed"] and abs(h["offset"] - whole["offset"]) <= HALF_OFFSET_TOLERANCE
-                and h["z"] >= MIN_Z for h in halves)
+    min_z = MIN_Z if min_z is None else min_z
+    whole = align(labels, change, min_marks=min_marks)
+    if whole["marks"] == 0:
+        return {**whole, "halves": [], "accepted": False}
+    # split only the labels that land inside the copy, so a partial copy (disc 1 of 2) is tested on
+    # the part it holds rather than on a second half that cannot match anything
+    mapped = np.rint(np.arange(len(labels)) * whole["speed"] + whole["offset"])
+    idx = np.flatnonzero((labels >= 0) & (mapped >= 0) & (mapped < len(change)))
+    mid = (idx[0] + idx[-1]) // 2
+    first, second = np.full_like(labels, -1), np.full_like(labels, -1)
+    first[idx[idx < mid]] = labels[idx[idx < mid]]
+    second[idx[idx >= mid]] = labels[idx[idx >= mid]]
+    halves = [align(h, change, min_marks=max(min_marks // 2, 10)) for h in (first, second)]
+    agree = all(h["marks"] and h["speed"] == whole["speed"]
+                and abs(h["offset"] - whole["offset"]) <= HALF_OFFSET_TOLERANCE
+                and h["z"] >= min_z / 2 ** 0.5 for h in halves)  # half the marks, z shrinks by sqrt 2
     return {**whole, "halves": [(h["speed"], h["offset"], round(h["z"], 1)) for h in halves],
-            "accepted": bool(agree and whole["z"] >= MIN_Z)}
+            "accepted": bool(agree and whole["z"] >= min_z)}
 
 
 def load_film(npz: Path, csv_path: Path) -> dict:
+    """Features and per-second labels; labels are all -1 unless the alignment is accepted."""
     d = np.load(npz)
     labels = read_cinescale(csv_path)
     a = check_alignment(labels, change_signal(d["thumbs"]))
-    y = map_labels(labels, len(d["feats"]), a["speed"], a["offset"])
+    y = (map_labels(labels, len(d["feats"]), a["speed"], a["offset"]) if a["accepted"]
+         else np.full(len(d["feats"]), -1))
     return {"X": d["feats"], "y": y, "align": a}
 
 

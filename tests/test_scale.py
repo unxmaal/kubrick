@@ -44,6 +44,18 @@ def test_check_alignment_rejects_halves_that_disagree():
     assert not scale.check_alignment(labels, change)["accepted"]
 
 
+def test_check_alignment_accepts_a_partial_copy_on_the_part_it_holds():
+    labels, change = planted(1.0, 12)
+    change = change[: len(labels) // 2]  # disc 1 of 2
+    assert scale.check_alignment(labels, change)["accepted"]
+
+
+def test_check_alignment_rejects_a_mismatched_pair():
+    labels, _ = planted(1.0, 0, seed=0)
+    _, other = planted(1.0, 0, seed=7)
+    assert not scale.check_alignment(labels, other)["accepted"]
+
+
 def test_map_labels_applies_speed_and_offset():
     labels = np.array([1, 2, 3, 4])
     assert scale.map_labels(labels, 8, 1.0, 2).tolist() == [-1, -1, 1, 2, 3, 4, -1, -1]
