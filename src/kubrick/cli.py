@@ -68,10 +68,31 @@ def parser() -> argparse.ArgumentParser:
     n = sub.add_parser("animatic", help="animatic.otio and animatic.mp4 from a valid project")
     n.add_argument("project", type=Path)
     n.add_argument("out_dir", type=Path)
+    r = sub.add_parser("rules", help="grammar rules")
+    rs = r.add_subparsers(dest="rules_cmd", required=True)
+    rc = rs.add_parser("check", help="recompute a measured rule on CineScale labels and replicate across directors")
+    rc.add_argument("rule")
+    rc.add_argument("--labels", type=Path, required=True, help="folder of <director>/<film>.csv label files")
+    rc.add_argument("--derive", default="Scorsese")
+    rc.add_argument("--draws", type=int, default=200)
+    rl = rs.add_parser("lint", help="check the grammar run books")
+    rl.add_argument("root", type=Path, nargs="?", default=Path("runbooks/grammar"))
     return p
 
 
 def run(a: argparse.Namespace) -> int:
+    if a.cmd == "rules":
+        from kubrick import grammar, rules
+
+        if a.rules_cmd == "lint":
+            errors = rules.lint(a.root)
+            print("\n".join(errors) if errors else "ok")
+            return 1 if errors else 0
+        r = grammar.replicate(a.rule, a.labels, a.derive, a.draws)
+        for name, d in r["directors"].items():
+            print(json.dumps({"director": name, **d}))
+        print(json.dumps({k: v for k, v in r.items() if k != "directors"}))
+        return 0
 
     if a.cmd == "card":
         from kubrick import animatic
