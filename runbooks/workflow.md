@@ -59,7 +59,7 @@ Draw each scene from above on a plane, in metres, with y pointing up the page.
 - `characters`: each character's position `pos: [x, y]`.
 - `shots`, keyed by shot id: `camera` with `pos`, `heading` (degrees counter-clockwise from +x, the way the lens points) and `lens_mm`. Add `moving` (each walking character's direction as `[dx, dy]`), `looks` and `gaze` (who looks at whom, and which screen side that is), and `action` (an action's phase at the shot's start and end, from 0 to 1) wherever they apply.
 
-Keep the camera on one side of the line between two characters who face each other, unless you mean to cross it. With a single character the axis check has nothing to compare; screen direction and wardrobe still apply.
+Keep the camera on one side of the line between two characters who face each other, unless you mean to cross it; then give that shot `crosses_line` with the reason (see `grammar/continuity.md`, axis-180). With a single character the axis check has nothing to compare; screen direction and wardrobe still apply.
 
 Check: `uv run kubrick continuity <project>` prints nothing and exits 0. Each line it prints names a rule id and a shot; fix the floor plan or the shot list until it is clean.
 

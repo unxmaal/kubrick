@@ -157,3 +157,16 @@ def test_prompt_fields_carry_the_breakdown_wardrobe_not_a_restatement(tmp_path):
     del docs["shotlist.json"]["scenes"][0]["shots"][0]["wardrobe"]
     p = stages.load_project(write(tmp_path, docs))
     assert stages.prompt_fields(p, "1", "1A")["wardrobe"] == {"GUARD": {"cap": "backwards"}}
+
+
+def test_a_cross_declared_in_the_floor_plan_reaches_the_checker(tmp_path):
+    docs = project()
+    docs["floorplan.json"]["scenes"][0]["shots"]["1B"]["crosses_line"] = "seen on screen"
+    scene = stages.assemble(stages.load_project(write(tmp_path, docs)), "1")
+    assert scene["shots"][1]["crosses_line"] == "seen on screen"
+
+
+def test_a_cross_without_a_reason_is_refused(tmp_path):
+    docs = project()
+    docs["floorplan.json"]["scenes"][0]["shots"]["1B"]["crosses_line"] = ""
+    assert any("crosses_line" in e for e in stages.validate_project(write(tmp_path, docs)))

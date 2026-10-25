@@ -38,6 +38,8 @@ def _side(scene: dict, pair: tuple[str, str], cam: dict) -> int:
 def _axis(scene: dict) -> list[dict]:
     out, shots = [], scene["shots"]
     for prev, cur in zip(shots, shots[1:]):
+        if cur.get("crosses_line"):  # a declared cross, with its reason, is the exception the rule allows
+            continue
         for pair in _pairs(prev) & _pairs(cur):
             if _side(scene, pair, prev["camera"]) * _side(scene, pair, cur["camera"]) < 0:
                 out.append({"rule": "axis-180", "shot": cur["id"], "previous": prev["id"],

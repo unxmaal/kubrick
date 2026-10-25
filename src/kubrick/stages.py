@@ -51,7 +51,8 @@ def schemas() -> dict[str, dict]:
                                "characters": {"type": "object", "additionalProperties": {
                                    "type": "object", "required": ["pos"], "properties": {"pos": POINT}}},
                                "shots": {"type": "object", "additionalProperties": {
-                                   "type": "object", "required": ["camera"], "properties": {"camera": camera}}}}}}}},
+                                   "type": "object", "required": ["camera"], "properties": {"camera": camera,
+                                                          "crosses_line": {"type": "string", "minLength": 1}}}}}}}}},
         "storyboard.json": {"type": "object", "required": ["panels"], "properties": {"panels": {
             "type": "array", "minItems": 1, "items": {
                 "type": "object", "required": ["shot", "image", "source"],
@@ -182,7 +183,7 @@ def assemble(p: dict, scene_id: str) -> dict:
     for shot in shotlist["shots"]:
         geo = plan["shots"][shot["id"]]
         shots.append({"id": shot["id"], "subjects": shot["subjects"], "wardrobe": shot.get("wardrobe", {}),
-                      **{k: geo[k] for k in ("camera", "moving", "looks", "gaze", "action") if k in geo}})
+                      **{k: geo[k] for k in ("camera", "moving", "looks", "gaze", "action", "crosses_line") if k in geo}})
     return {"id": scene_id, "characters": plan["characters"], "wardrobe": breakdown["wardrobe"],
             "wardrobe_changes": breakdown.get("wardrobe_changes", []), "shots": shots}
 
