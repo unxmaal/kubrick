@@ -46,7 +46,49 @@ def main(argv: list[str] | None = None) -> int:
     t.add_argument("films", nargs="+", help="features.npz:labels.csv[:pose.npz] per film")
     t.add_argument("--out", type=Path, required=True)
     t.add_argument("--kind", choices=("linear", "boost"), default="boost")
+    k = sub.add_parser("card", help="a text storyboard panel for one shot")
+    k.add_argument("shot")
+    k.add_argument("text")
+    k.add_argument("out", type=Path)
+    v = sub.add_parser("validate", help="check a project's stage documents and the joins between them")
+    v.add_argument("project", type=Path)
+    o = sub.add_parser("continuity", help="continuity violations per scene, one JSON line each")
+    o.add_argument("project", type=Path)
+    n = sub.add_parser("animatic", help="animatic.otio and animatic.mp4 from a valid project")
+    n.add_argument("project", type=Path)
+    n.add_argument("out_dir", type=Path)
     a = p.parse_args(argv)
+
+    if a.cmd == "card":
+        from kubrick import animatic
+
+        animatic.card(a.shot, a.text, a.out)
+        return 0
+    if a.cmd == "validate":
+        from kubrick import stages
+
+        errors = stages.validate_project(a.project)
+        print("\n".join(errors) if errors else "ok")
+        return 1 if errors else 0
+    if a.cmd == "continuity":
+        from kubrick import continuity, stages
+
+        errors = stages.validate_project(a.project)
+        if errors:
+            print("\n".join(errors))
+            return 2
+        proj, found = stages.load_project(a.project), 0
+        for scene in proj["shotlist.json"]["scenes"]:
+            for v in continuity.check(stages.assemble(proj, scene["id"])):
+                print(json.dumps({"scene": scene["id"], **v}))
+                found += 1
+        return 1 if found else 0
+    if a.cmd == "animatic":
+        from kubrick import animatic
+
+        otio_path, mp4 = animatic.build(a.project, a.out_dir)
+        print(json.dumps({"otio": str(otio_path), "mp4": str(mp4)}))
+        return 0
 
     if a.cmd == "breakdown":
         from kubrick import breakdown

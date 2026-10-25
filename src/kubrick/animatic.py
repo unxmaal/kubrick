@@ -36,6 +36,22 @@ def timeline(p: dict) -> otio.schema.Timeline:
     return tl
 
 
+def card(shot_id: str, text: str, out: Path) -> None:
+    """A text panel: the shot id and its description, for an animatic made before any image exists."""
+    import textwrap
+
+    import cv2
+    import numpy as np
+
+    w, h = W // 2, H // 2
+    img = np.full((h, w, 3), 24, np.uint8)
+    cv2.putText(img, shot_id, (24, 56), cv2.FONT_HERSHEY_SIMPLEX, 1.4, (230, 230, 230), 2, cv2.LINE_AA)
+    for i, line in enumerate(textwrap.wrap(text, 44)[:8]):
+        cv2.putText(img, line, (24, 110 + 30 * i), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (200, 200, 200), 1, cv2.LINE_AA)
+    if not cv2.imwrite(str(out), img):
+        raise RuntimeError(f"could not write {out}")
+
+
 def render(tl: otio.schema.Timeline, root: Path, out: Path) -> None:
     """Each panel held for exactly its clip's frames, letterboxed to W x H at FPS."""
     clips = list(tl.find_clips())
