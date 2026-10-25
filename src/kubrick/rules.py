@@ -5,7 +5,7 @@ from pathlib import Path
 
 from kubrick import continuity, grammar
 
-KINDS = ("measured", "practice", "refuted")
+KINDS = ("measured", "practice", "refuted", "provisional")  # provisional: one source, says what would confirm it
 REQUIRED = ("kind", "decision", "applies when", "check", "counterexample")
 MAX_QUOTE_WORDS = 15
 QUOTE = re.compile(r'"([^"]+)"|“([^”]+)”')
@@ -52,6 +52,15 @@ def lint(root: Path) -> list[str]:
                 errors.append(f"{where}: kind {kind} is not one of {', '.join(KINDS)}")
             if kind == "practice" and len(r["sources"]) < 2:
                 errors.append(f"{where}: a practice rule needs two sources, has {len(r['sources'])}")
+            if kind == "provisional":
+                if not r["sources"]:
+                    errors.append(f"{where}: no sources")
+                if not r.get("confirm"):
+                    errors.append(f"{where}: a provisional rule must say what would confirm it (confirm:)")
+            for s in r["sources"]:
+                # a second-hand report names the book it reports: "secondary: <source>, on <book>: <point>"
+                if s.startswith("secondary:") and ", on " not in s:
+                    errors.append(f"{where}: secondary source does not name the book it reports: {s[:60]}")
             if kind in ("measured", "refuted"):
                 if not r["sources"]:
                     errors.append(f"{where}: no sources")
