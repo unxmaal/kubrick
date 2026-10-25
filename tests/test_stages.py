@@ -89,6 +89,29 @@ def test_a_storyboard_panel_must_exist_and_say_where_it_came_from(tmp_path):
     assert any("missing.png" in e for e in errors) and any("unknown" in e for e in errors)
 
 
+def test_validation_up_to_a_stage_ignores_later_documents_but_still_joins_the_present_ones(tmp_path):
+    # conformance run, 2026-10-25: at step 2 only the script and breakdown exist; a bad heading must show
+    docs = {k: v for k, v in project().items() if k in ("script.fountain", "breakdown.json")}
+    docs["breakdown.json"]["scenes"][0]["heading"] = "INT. NOWHERE - DAY"
+    errors = stages.validate_project(write(tmp_path, docs), until="breakdown.json")
+    assert errors and not any("missing" in e for e in errors)
+    assert any("INT. NOWHERE - DAY" in e for e in errors)
+
+
+def test_validation_up_to_the_floor_plan_passes_before_the_storyboard_exists(tmp_path):
+    docs = {k: v for k, v in project().items() if k != "storyboard.json"}
+    assert stages.validate_project(write(tmp_path, docs), until="floorplan.json") == []
+    assert any("storyboard.json: missing" in e for e in stages.validate_project(tmp_path))
+
+
+def test_the_breakdown_records_model_tests_with_a_known_result(tmp_path):
+    docs = project()
+    docs["breakdown.json"]["scenes"][0]["model_tests"] = [{"detail": "cap pulled low", "result": "untested"}]
+    assert stages.validate_project(write(tmp_path, docs)) == []
+    docs["breakdown.json"]["scenes"][0]["model_tests"][0]["result"] = "probably"
+    assert any("probably" in e for e in stages.validate_project(write(tmp_path, docs)))
+
+
 def test_assembled_scene_carries_the_breakdowns_wardrobe_and_passes_the_checker(tmp_path):
     p = stages.load_project(write(tmp_path, project()))
     scene = stages.assemble(p, "1")

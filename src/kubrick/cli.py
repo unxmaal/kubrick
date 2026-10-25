@@ -61,6 +61,8 @@ def parser() -> argparse.ArgumentParser:
     k.add_argument("out", type=Path)
     v = sub.add_parser("validate", help="check a project's stage documents and the joins between them")
     v.add_argument("project", type=Path)
+    v.add_argument("--until", choices=("script", "breakdown", "shotlist", "floorplan", "storyboard"),
+                   help="check the documents up to this stage only")
     o = sub.add_parser("continuity", help="continuity violations per scene, one JSON line each")
     o.add_argument("project", type=Path)
     n = sub.add_parser("animatic", help="animatic.otio and animatic.mp4 from a valid project")
@@ -79,13 +81,14 @@ def run(a: argparse.Namespace) -> int:
     if a.cmd == "validate":
         from kubrick import stages
 
-        errors = stages.validate_project(a.project)
+        until = None if a.until is None else next(d for d in stages.DOCS if d.startswith(a.until + "."))
+        errors = stages.validate_project(a.project, until)
         print("\n".join(errors) if errors else "ok")
         return 1 if errors else 0
     if a.cmd == "continuity":
         from kubrick import continuity, stages
 
-        errors = stages.validate_project(a.project)
+        errors = stages.validate_project(a.project, until="floorplan.json")  # the storyboard comes later
         if errors:
             print("\n".join(errors))
             return 2

@@ -52,19 +52,25 @@ def card(shot_id: str, text: str, out: Path) -> None:
         raise RuntimeError(f"could not write {out}")
 
 
-def render(tl: otio.schema.Timeline, root: Path, out: Path) -> None:
-    """Each panel held for exactly its clip's frames, letterboxed to W x H at FPS."""
+def render(tl: otio.schema.Timeline, root: Path, out: Path, fps: int = FPS) -> None:
+    """Each panel held for exactly its clip's frames, letterboxed to W x H at `fps`."""
     clips = list(tl.find_clips())
     args, graph = [], []
     for i, clip in enumerate(clips):
-        args += ["-loop", "1", "-framerate", str(FPS), "-i", str(Path(root) / clip.media_reference.target_url)]
-        n = round(clip.duration().to_seconds() * FPS)
+        args += ["-loop", "1", "-framerate", str(fps), "-i", str(Path(root) / clip.media_reference.target_url)]
+        n = round(clip.duration().to_seconds() * fps)
         graph.append(f"[{i}:v]scale={W}:{H}:force_original_aspect_ratio=decrease,pad={W}:{H}:(ow-iw)/2:(oh-ih)/2,"
-                     f"setsar=1,format=yuv420p,trim=end_frame={n},setpts=PTS-STARTPTS,settb=1/{FPS}[v{i}]")
+                     f"setsar=1,format=yuv420p,trim=end_frame={n},setpts=PTS-STARTPTS,settb=1/{fps}[v{i}]")
     graph.append("".join(f"[v{i}]" for i in range(len(clips))) + f"concat=n={len(clips)}:v=1:a=0[out]")
     subprocess.run(["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-y", *args,
-                    "-filter_complex", ";".join(graph), "-map", "[out]", "-r", str(FPS),
+                    "-filter_complex", ";".join(graph), "-map", "[out]", "-r", str(fps),
                     "-c:v", "libx264", "-crf", "20", str(out)], check=True)
+
+
+def frame_count(path: Path) -> int:
+    return int(subprocess.run(["ffprobe", "-v", "error", "-count_frames", "-select_streams", "v:0", "-show_entries",
+                               "stream=nb_read_frames", "-of", "csv=p=0", str(path)],
+                              capture_output=True, text=True, check=True).stdout.strip())
 
 
 def build(root: Path, out_dir: Path) -> tuple[Path, Path]:
@@ -77,4 +83,7 @@ def build(root: Path, out_dir: Path) -> tuple[Path, Path]:
     tl = timeline(stages.load_project(root))
     otio.adapters.write_to_file(tl, str(out_dir / "animatic.otio"))
     render(tl, root, out_dir / "animatic.mp4")
+    want, got = round(tl.duration().to_seconds() * FPS), frame_count(out_dir / "animatic.mp4")
+    if got != want:
+        raise RuntimeError(f"animatic.mp4 has {got} frames; the timeline has {want}")
     return out_dir / "animatic.otio", out_dir / "animatic.mp4"

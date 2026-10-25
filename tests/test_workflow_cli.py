@@ -33,6 +33,29 @@ def test_continuity_lists_violations_by_rule_and_exits_nonzero(tmp_path, capsys)
     assert [r["rule"] for r in rows] == ["wardrobe-state"] and rows[0]["scene"] == "1"
 
 
+def test_continuity_runs_before_the_storyboard_exists(tmp_path):
+    docs = {k: v for k, v in project().items() if k != "storyboard.json"}
+    assert main(["continuity", str(write(tmp_path, docs))]) == 0
+
+
+def test_validate_until_a_stage(tmp_path, capsys):
+    docs = {k: v for k, v in project().items() if k in ("script.fountain", "breakdown.json")}
+    assert main(["validate", str(write(tmp_path, docs)), "--until", "breakdown"]) == 0
+    assert "ok" in capsys.readouterr().out
+
+
+def test_animatic_build_refuses_a_render_shorter_than_its_timeline(tmp_path, monkeypatch):
+    import pytest
+
+    root = write(tmp_path, project())
+    for name in ("1A.png", "1B.jpg"):
+        cv2.imwrite(str(root / "panels" / name), np.full((360, 640, 3), 90, np.uint8))
+    real = animatic.render
+    monkeypatch.setattr(animatic, "render", lambda tl, r, out: real(tl, r, out, fps=12))  # half the frames
+    with pytest.raises(RuntimeError, match="frames"):
+        animatic.build(root, tmp_path / "out")
+
+
 def test_animatic_command_builds_both_files(tmp_path):
     root = write(tmp_path, project())
     for name in ("1A.png", "1B.jpg"):

@@ -4,7 +4,7 @@ Follow these steps in order. Each step writes one document into the project fold
 
 No video is rendered before Eric approves the animatic (step 8). Rendering, the pilot and the edit come after that gate, and their tooling is tracked in kubrick #6.
 
-Shot sizes and camera movements use only the labels in `taxonomy.toml`. Continuity rule ids (`axis-180`, `eyeline-match`, `screen-direction`, `action-phase`, `wardrobe-state`) are defined in `src/kubrick/continuity.py`, and the grammar run books in `runbooks/grammar/` cite them.
+Shot sizes and camera movements use only the labels in `taxonomy.toml`. Continuity rule ids (`axis-180`, `eyeline-match`, `screen-direction`, `action-phase`, `wardrobe-state`) are defined in `src/kubrick/continuity.py`. The grammar run books in `runbooks/grammar/` (kubrick #3) cite them; until that folder exists, skip the steps that refer to it.
 
 ## 0. Set up
 
@@ -14,8 +14,9 @@ Shot sizes and camera movements use only the labels in `taxonomy.toml`. Continui
 ## 1. Script: `script.fountain`
 
 1. Write the story as a screenplay in Fountain format. Every scene starts with a scene heading on its own line after a blank line: `INT.` or `EXT.`, a place, ` - `, and a time of day. Example: `EXT. SERVICE YARD - NIGHT`.
-2. Narration is a character cue followed by the lines, for example `NARRATOR (V.O.)`. Keep the story's own words for narration where the story has them.
-3. Write action lines as what the camera can see, in present tense. Do not write thoughts, backstory or sounds the audience cannot hear.
+2. A scene is continuous action in one place at one time. A change of place or time starts a new scene, even inside one paragraph of the story. A place seen only in the distance belongs to the scene it is seen from.
+3. Narration is a character cue followed by the lines, for example `NARRATOR (V.O.)`. Keep the story's own words for narration where the story has them.
+4. Write action lines as what the camera can see, in present tense. Do not write thoughts, backstory or sounds the audience cannot hear.
 
 Check: every scene in the story appears as a heading, in story order. Read the headings back with `grep -n -E '^(INT|EXT|EST|I/E|\.)' script.fountain`.
 
@@ -25,17 +26,17 @@ For each scene, list:
 - `id` (a short string, "1", "2"...) and `heading`, copied exactly from the script;
 - `characters` who appear;
 - `sets`;
-- `props`: every object the story needs, each with a fixed `place`;
+- `props`: every object the story needs that stays put, each with its `place`. An object a character carries or handles (keys, a torch) goes under that character in `wardrobe` instead, so its state can change from shot to shot;
 - `wardrobe`: each character's items and their state, for example `{"GUARD": {"cap": "forward"}}`;
 - `wardrobe_changes`: only when a state changes on screen, as `{"shot", "char", "item", "state"}`.
 
-Check: `uv run kubrick validate <project>`. Until the last step, errors that say a later document is "missing" are expected; fix every other error.
+Check: `uv run kubrick validate <project> --until breakdown` prints `ok`. It also checks every breakdown heading against the script.
 
 ## 3. Test what the model must hold
 
-For every wardrobe or prop detail the story depends on (an unusual way of wearing something, a prop's exact state), test it before the shot list locks. Generate two stills of it with the local image model (`soh` MCP `image` tool) from different angles. If a detail does not hold in both, change the detail now, write down why in the breakdown, and tell Eric. Settle the spec here, not after paid takes: tsatd's guard cap was specified worn backwards and the model could not hold it across cuts, so the spec changed after three takes.
+For every wardrobe or prop detail the story depends on (an unusual way of wearing something, a prop's exact state), test it before the shot list locks. Generate two stills of it with the local image model (`soh` MCP `image` tool) from different angles. Record each test in the breakdown scene's `model_tests` as `{"detail", "result", "note"}`, where `result` is `held`, `failed` or `untested`. If a detail fails, change the detail now, say why in its `note`, and tell Eric. Settle the spec here, not after paid takes: tsatd's guard cap was specified worn backwards and the model could not hold it across cuts, so the spec changed after three takes.
 
-If no image model is available, record the detail as "untested" and carry on.
+If no image model is available, record the detail with `result` `untested` and carry on.
 
 ## 4. Shot list: `shotlist.json`
 
@@ -50,7 +51,7 @@ For each scene, list its shots in order. Each shot has:
 
 Cover each scene so the audience always knows where they are: open wide enough to place the action, then move in. When the grammar run books in `runbooks/grammar/` exist, follow their coverage and scale rules and note the rule id beside any shot that departs from them.
 
-Check: `uv run kubrick validate <project>`.
+Check: `uv run kubrick validate <project> --until shotlist` prints `ok`.
 
 ## 5. Floor plan: `floorplan.json`
 
@@ -69,13 +70,13 @@ One panel per shot, in a `panels/` folder, listed in `storyboard.json` as `{"sho
 2. Otherwise generate a still with the local image model. Its `source` is `generated`. Make several candidates and keep the one that matches the shot list and floor plan.
 3. If no image model is available, make a text card with `uv run kubrick card <shot id> "<description>" panels/<shot id>.png`. Its `source` is `generated`.
 
-Check: lay the panels out in order and read them yourself: count the people, check each prop and wardrobe state against the breakdown, and check the framing against the shot's scale. Then run `uv run kubrick validate <project>`, which must print `ok`.
+Check: lay the panels out in order and read them yourself. For an image, count the people, check each prop and wardrobe state against the breakdown, and check the framing against the shot's scale. For a text card, check its text against the shot list. Then run `uv run kubrick validate <project>`, which must print `ok`.
 
 ## 7. Animatic
 
 Run `uv run kubrick animatic <project> <project>/animatic`. It writes `animatic.otio` (the timeline) and `animatic.mp4` (the render).
 
-Check: the mp4 plays for the sum of the shot durations, and each panel appears for its own shot.
+Check: the command fails unless the mp4 has exactly as many frames as the timeline. Then watch it yourself and confirm each panel appears for its own shot, in shot-list order.
 
 ## 8. Gate: Eric approves the animatic
 
