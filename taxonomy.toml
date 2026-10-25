@@ -1,0 +1,10 @@
+[scale]
+source = "CineScale, Savardi et al., Data in Brief 2021, DOI 10.17632/th46h4vdwd.1"
+labels = ["ECU", "CU", "MCU", "MS", "MLS", "LS", "ELS", "FS", "IS"]
+ordinal = ["ECU", "CU", "MCU", "MS", "MLS", "LS", "ELS"]
+
+[movement]
+labels = ["static", "pan", "tilt", "push", "pull", "handheld"]
+
+[transition]
+labels = ["cut", "dissolve", "fade"]

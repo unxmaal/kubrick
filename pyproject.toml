@@ -1,0 +1,25 @@
+[project]
+name = "kubrick"
+version = "0.1.0"
+description = "Directing run books and breakdown tooling for generative short films"
+readme = "README.md"
+authors = [
+    { name = "Eric Dodd", email = "eric.e.dodd@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=2.5.4",
+    "scenedetect[opencv-headless]>=0.7.2",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.23,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[project.scripts]
+kubrick = "kubrick.cli:main"
