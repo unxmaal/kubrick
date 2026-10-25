@@ -7,7 +7,16 @@ from kubrick import cuts, knownset, synth
 from kubrick.score import score
 
 
+def commands() -> set[str]:
+    return set(next(a for a in parser()._actions if a.dest == "cmd").choices)
+
+
 def main(argv: list[str] | None = None) -> int:
+    a = parser().parse_args(argv)
+    return run(a)
+
+
+def parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="kubrick")
     sub = p.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("synth", help="build a known-answer clip from a spec")
@@ -57,7 +66,10 @@ def main(argv: list[str] | None = None) -> int:
     n = sub.add_parser("animatic", help="animatic.otio and animatic.mp4 from a valid project")
     n.add_argument("project", type=Path)
     n.add_argument("out_dir", type=Path)
-    a = p.parse_args(argv)
+    return p
+
+
+def run(a: argparse.Namespace) -> int:
 
     if a.cmd == "card":
         from kubrick import animatic
