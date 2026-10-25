@@ -29,6 +29,21 @@ def test_align_finds_nothing_in_noise():
     assert scale.align(labels, change)["z"] < 6
 
 
+def test_check_alignment_accepts_a_consistent_film():
+    labels, change = planted(1.0, 40)
+    assert scale.check_alignment(labels, change)["accepted"]
+
+
+def test_check_alignment_rejects_halves_that_disagree():
+    # a copy whose second half was re-cut: the second half's changes land 90 s later
+    labels, change = planted(1.0, 0)
+    marks = np.flatnonzero(labels[1:] != labels[:-1]) + 1
+    late = marks[marks > len(labels) // 2]
+    change[np.rint(late).astype(int)] -= 30
+    change[np.rint(late + 90).astype(int)] += 30
+    assert not scale.check_alignment(labels, change)["accepted"]
+
+
 def test_map_labels_applies_speed_and_offset():
     labels = np.array([1, 2, 3, 4])
     assert scale.map_labels(labels, 8, 1.0, 2).tolist() == [-1, -1, 1, 2, 3, 4, -1, -1]

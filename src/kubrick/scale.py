@@ -88,10 +88,28 @@ ORDINAL = (1, 2, 3, 4, 5, 6, 7)  # ECU..ELS; FS (0) and INS (8) are not on the s
 MIN_Z = 8.0  # alignment must beat shuffled label-change times by this many sd to be used
 
 
+HALF_OFFSET_TOLERANCE = 2  # seconds the two halves' offsets may differ by
+
+
+def check_alignment(labels: np.ndarray, change: np.ndarray) -> dict:
+    """Align the whole film and each half alone. A real alignment agrees with itself; a spurious one
+    (a different edition, a partial copy) gives halves with different speeds or offsets."""
+    whole = align(labels, change)
+    n = min(len(labels), int(len(change) / whole["speed"]))
+    first, second = labels.copy(), labels.copy()
+    first[n // 2:] = -1
+    second[: n // 2] = -1
+    halves = [align(h, change) for h in (first, second)]
+    agree = all(h["speed"] == whole["speed"] and abs(h["offset"] - whole["offset"]) <= HALF_OFFSET_TOLERANCE
+                and h["z"] >= MIN_Z for h in halves)
+    return {**whole, "halves": [(h["speed"], h["offset"], round(h["z"], 1)) for h in halves],
+            "accepted": bool(agree and whole["z"] >= MIN_Z)}
+
+
 def load_film(npz: Path, csv_path: Path) -> dict:
     d = np.load(npz)
     labels = read_cinescale(csv_path)
-    a = align(labels, change_signal(d["thumbs"]))
+    a = check_alignment(labels, change_signal(d["thumbs"]))
     y = map_labels(labels, len(d["feats"]), a["speed"], a["offset"])
     return {"X": d["feats"], "y": y, "align": a}
 
