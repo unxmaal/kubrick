@@ -13,6 +13,7 @@ dependencies = [
     "opentimelineio>=0.18.1",
     "pyobjc-framework-quartz>=12.2.2",
     "pyobjc-framework-vision>=12.2.2",
+    "safetensors>=0.8.0",
     "scenedetect[opencv-headless]>=0.7.2",
     "scikit-learn>=1.9.1",
     "transformers>=5.20.2",
