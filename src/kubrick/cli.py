@@ -26,7 +26,60 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--min-len", type=int)
     w = sub.add_parser("sweep", help="score every detector across its registered thresholds")
     w.add_argument("video", type=Path)
+    f = sub.add_parser("features", help="per-second image features and thumbnails (.npz)")
+    f.add_argument("video")
+    f.add_argument("out", type=Path)
+    f.add_argument("--model")
+    f.add_argument("--grid", type=int)
+    q = sub.add_parser("pose", help="per-second body-pose and face features (.npz)")
+    q.add_argument("video")
+    q.add_argument("out", type=Path)
+    e = sub.add_parser("scale-eval", help="leave-one-film-out shot-scale evaluation against CineScale")
+    e.add_argument("films", nargs="+", help="features.npz:labels.csv[:pose.npz] per film")
+    e.add_argument("--kind", choices=("linear", "boost"), default="boost")
+    e.add_argument("--shuffles", type=int, default=2)
     a = p.parse_args(argv)
+
+    if a.cmd == "scale-eval":
+        import numpy as np
+
+        from kubrick import scale
+
+        films = {}
+        for spec in a.films:
+            parts = spec.split(":")
+            film = scale.load_film(Path(parts[0]), Path(parts[1]))
+            if len(parts) > 2:
+                film["pose"] = np.load(parts[2])["pose"]
+            print(json.dumps({"film": Path(parts[0]).stem, "aligned": film["align"]["accepted"],
+                              "z": round(film["align"]["z"], 1)}), flush=True)
+            if film["align"]["accepted"]:
+                films[Path(parts[0]).stem] = film
+        for te in films:
+            tr = [n for n in films if n != te]
+            r = scale.evaluate(films, tr, [te], kind=a.kind)[te]
+            ctl = [scale.evaluate(films, tr, [te], shuffle=True, seed=s, kind=a.kind)[te]["kappa_linear"]
+                   for s in range(a.shuffles)]
+            print(json.dumps({"test": te, **{k: round(v, 3) for k, v in r.items()},
+                              "shuffled_kappa_max": round(max(ctl), 3) if ctl else None}), flush=True)
+        return 0
+
+    if a.cmd == "pose":
+        import numpy as np
+
+        from kubrick import pose, scale
+
+        rows = [pose.features(frame) for _, frame in scale.sample_frames(a.video)]
+        np.savez_compressed(a.out, pose=np.array(rows, np.float32), n_features=pose.N_FEATURES,
+                            min_confidence=pose.MIN_CONFIDENCE, height=scale.H)
+        return 0
+
+    if a.cmd == "features":
+        from kubrick import scale
+
+        scale.featurise(a.video, a.out, model=a.model or scale.EMBED_MODEL,
+                        grid=scale.GRID if a.grid is None else a.grid)
+        return 0
 
     if a.cmd == "synth":
         synth.build(synth.Spec.from_dict(json.loads(a.spec.read_text())), a.out)
