@@ -65,18 +65,26 @@ def _eyeline(scene: dict) -> list[dict]:
     return out
 
 
+def screen_direction(cam: dict, v) -> str:
+    """Where movement `v` reads on screen from `cam`: left, right, or neutral (head-on or tail-away).
+    The checker and the prompt hand-off both use this, so they cannot disagree."""
+    norm = math.hypot(*v) or 1.0
+    x = _screen_x(cam, v) / norm
+    if abs(x) < NEUTRAL.default:
+        return "neutral"
+    return "right" if x > 0 else "left"
+
+
 def _direction(scene: dict) -> list[dict]:
     out, last = [], {}  # subject -> (shot id, direction) of its latest non-neutral appearance
     for shot in scene["shots"]:
         for who, v in shot.get("moving", {}).items():
             if who not in shot.get("subjects", []):
                 continue
-            norm = math.hypot(*v) or 1.0
-            x = _screen_x(shot["camera"], v) / norm
-            if abs(x) < NEUTRAL.default:
+            d = screen_direction(shot["camera"], v)
+            if d == "neutral":
                 last.pop(who, None)  # a head-on or tail-away shot resets the direction
                 continue
-            d = "right" if x > 0 else "left"
             if who in last and last[who][1] != d:
                 out.append({"rule": "screen-direction", "shot": shot["id"], "previous": last[who][0],
                             "detail": f"{who} moves {last[who][1]} then {d}"})
