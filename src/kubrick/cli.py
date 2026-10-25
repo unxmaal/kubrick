@@ -58,6 +58,7 @@ def parser() -> argparse.ArgumentParser:
     ft.add_argument("--control", action="store_true", help="train on shuffled labels")
     ft.add_argument("--draws", type=int, default=100)
     ft.add_argument("--boots", type=int, default=200)
+    ft.add_argument("--seeds", type=int, default=1, help="repeat with seeds 0..N-1 and report each rule's fit rate")
     b = sub.add_parser("breakdown", help="one row per shot (rows.jsonl) plus frame grabs")
     b.add_argument("video")
     b.add_argument("out_dir", type=Path)
@@ -228,8 +229,14 @@ def run(a: argparse.Namespace) -> int:
             n = min(len(fr), len(film["y"]))
             film["y"] = film["y"][:n]
             films[name], frames[name], film_cuts[name] = film, fr, json.loads(Path(cut).read_text(encoding="utf-8"))
-        r = finetune.leave_one_out(films, frames, film_cuts, a.epochs, a.stride, a.control, a.draws, a.boots,
-                                   log=lambda m: print(json.dumps({"log": m}), file=sys.stderr, flush=True))
+        log = lambda m: print(json.dumps({"log": m}), file=sys.stderr, flush=True)
+        if a.seeds > 1:
+            for name, v in finetune.over_seeds(films, frames, film_cuts, list(range(a.seeds)), epochs=a.epochs,
+                                               stride=a.stride, shuffle=a.control, draws=a.draws, boots=a.boots,
+                                               log=log).items():
+                print(json.dumps({"test": name, "control": a.control, **v}), flush=True)
+            return 0
+        r = finetune.leave_one_out(films, frames, film_cuts, a.epochs, a.stride, a.control, a.draws, a.boots, log=log)
         for name, v in r.items():
             print(json.dumps({"test": name, "control": a.control, **v}, default=float), flush=True)
         return 0

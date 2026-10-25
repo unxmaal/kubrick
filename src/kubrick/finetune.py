@@ -114,7 +114,8 @@ def predict(model: dict, X: np.ndarray, batch: int = 64) -> np.ndarray:
 
 
 def leave_one_out(films: dict[str, dict], frames: dict[str, np.ndarray], cuts: dict[str, dict], epochs: int = 3,
-                  stride: int = 2, shuffle: bool = False, draws: int = 100, boots: int = 200, log=None) -> dict:
+                  stride: int = 2, shuffle: bool = False, draws: int = 100, boots: int = 200, log=None,
+                  seed: int = 0) -> dict:
     """Fine-tune on the other films (every `stride`-th labelled second), label the held-out film, and return
     per-film kappa beside fitness.leave_one_out_with's per-rule verdicts. `shuffle` permutes training labels."""
     from sklearn.metrics import cohen_kappa_score
@@ -129,7 +130,7 @@ def leave_one_out(films: dict[str, dict], frames: dict[str, np.ndarray], cuts: d
         y = np.concatenate([films[n]["y"][idx[n]] for n in others])
         if shuffle:
             y = np.random.default_rng(0).permutation(y)
-        model = train(X, y, epochs=epochs, log=log)
+        model = train(X, y, epochs=epochs, log=log, seed=seed)
         m = np.flatnonzero(films[test]["y"] >= 0)
         pred = np.full(len(films[test]["y"]), -1)
         pred[m] = predict(model, frames[test][m])
@@ -141,3 +142,15 @@ def leave_one_out(films: dict[str, dict], frames: dict[str, np.ndarray], cuts: d
 
     fit = fitness.leave_one_out_with(films, cuts, fit_predict, draws=draws, boots=boots)
     return {n: {**kappa[n], "fitness": fit[n]} for n in films}
+
+
+def over_seeds(films: dict[str, dict], frames: dict[str, np.ndarray], cuts: dict[str, dict], seeds: list[int],
+               **kw) -> dict:
+    """One verdict can flip between identical runs (#8), so read fitness as the share of seeds that fit."""
+    runs = [leave_one_out(films, frames, cuts, seed=s, **kw) for s in seeds]
+    out = {}
+    for n in films:
+        rules = runs[0][n]["fitness"]
+        out[n] = {"seeds": list(seeds), "kappa_linear": [r[n]["kappa_linear"] for r in runs],
+                  "fit_rate": {rule: sum(r[n]["fitness"][rule]["fit"] for r in runs) / len(runs) for rule in rules}}
+    return out
