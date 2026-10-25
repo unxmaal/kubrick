@@ -62,3 +62,38 @@ def test_animatic_command_builds_both_files(tmp_path):
         cv2.imwrite(str(root / "panels" / name), np.full((360, 640, 3), 90, np.uint8))
     assert main(["animatic", str(root), str(tmp_path / "out")]) == 0
     assert (tmp_path / "out" / "animatic.otio").is_file() and (tmp_path / "out" / "animatic.mp4").is_file()
+
+
+def test_cli_scenarios_checks_each_issue_the_pr_body_names(tmp_path, monkeypatch, capsys):
+    import json as _json
+
+    from kubrick import scenarios
+    from kubrick.cli import main
+
+    bodies = {20: "#### Scenario: an issue with no scenarios passes\n", 5: "#### Scenario: nobody wrote this test\n"}
+    asked = []
+    monkeypatch.setattr(scenarios, "issue_body", lambda n, repo=None: asked.append(n) or bodies[n])
+    (tmp_path / "pr.md").write_text("Part of #20. Closes #5. See #13.", encoding="utf-8")
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_x.py").write_text("def test_an_issue_with_no_scenarios_passes():\n    pass\n", encoding="utf-8")
+    assert main(["scenarios", "--pr-body-file", str(tmp_path / "pr.md"), "--tests", str(tmp_path / "tests")]) == 1
+    rows = {r["issue"]: r for r in map(_json.loads, capsys.readouterr().out.splitlines())}
+    assert sorted(asked) == [5, 20] and rows[20]["ok"] and rows[5]["missing"] == ["nobody wrote this test"]
+
+
+def test_cli_scenarios_passes_a_pr_that_names_no_issue(tmp_path, capsys):
+    from kubrick.cli import main
+
+    (tmp_path / "pr.md").write_text("A typo fix.", encoding="utf-8")
+    assert main(["scenarios", "--pr-body-file", str(tmp_path / "pr.md")]) == 0
+
+
+def test_ci_runs_the_scenario_check_on_pull_requests_with_a_token_that_can_read_issues():
+    # the scanner is only a gate if CI invokes it, and gh issue view fails without issues: read
+    import yaml
+    from pathlib import Path
+
+    wf = yaml.safe_load((Path(__file__).resolve().parents[1] / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
+    steps = [s for s in wf["jobs"]["check"]["steps"] if "kubrick scenarios" in s.get("run", "")]
+    assert steps and "--pr-body-file" in steps[0]["run"] and "pull_request" in steps[0].get("if", "")
+    assert wf["permissions"].get("issues") == "read"

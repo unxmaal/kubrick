@@ -66,6 +66,10 @@ def parser() -> argparse.ArgumentParser:
     t.add_argument("films", nargs="+", help="features.npz:labels.csv[:pose.npz] per film")
     t.add_argument("--out", type=Path, required=True)
     t.add_argument("--kind", choices=("linear", "boost"), default="boost")
+    sc = sub.add_parser("scenarios", help="each issue a PR body names: its #### Scenario: lines against tests/ (#20)")
+    sc.add_argument("--pr-body-file", type=Path, required=True)
+    sc.add_argument("--tests", type=Path, default=Path("tests"))
+    sc.add_argument("--repo")
     k = sub.add_parser("card", help="a text storyboard panel for one shot")
     k.add_argument("shot")
     k.add_argument("text")
@@ -104,6 +108,16 @@ def run(a: argparse.Namespace) -> int:
             print(json.dumps({"director": name, **d}))
         print(json.dumps({k: v for k, v in r.items() if k != "directors"}))
         return 0
+
+    if a.cmd == "scenarios":
+        from kubrick import scenarios
+
+        ok = True
+        for n in scenarios.issues_named(a.pr_body_file.read_text(encoding="utf-8")):
+            r = scenarios.check(scenarios.parse(scenarios.issue_body(n, a.repo)), a.tests)
+            print(json.dumps({"issue": n, **r}), flush=True)
+            ok = ok and r["ok"]
+        return 0 if ok else 1
 
     if a.cmd == "card":
         from kubrick import animatic

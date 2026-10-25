@@ -12,6 +12,7 @@ concurrency:
 
 permissions:
   contents: read
+  issues: read  # kubrick scenarios reads the issues a PR names
 
 jobs:
   check:
@@ -50,3 +51,10 @@ jobs:
 
       - name: rules lint
         run: uv run kubrick rules lint
+
+      - name: scenarios of the issues this PR names (#20)
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: printf '%s' "$PR_BODY" > /tmp/pr-body.md && uv run kubrick scenarios --pr-body-file /tmp/pr-body.md --repo "$GITHUB_REPOSITORY"
