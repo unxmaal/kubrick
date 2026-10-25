@@ -47,6 +47,17 @@ def parser() -> argparse.ArgumentParser:
     e.add_argument("films", nargs="+", help="features.npz:labels.csv[:pose.npz] per film")
     e.add_argument("--kind", choices=("linear", "boost"), default="boost")
     e.add_argument("--shuffles", type=int, default=2)
+    fr = sub.add_parser("frames", help="one square frame per second (.npy), for scale-finetune")
+    fr.add_argument("video")
+    fr.add_argument("out", type=Path)
+    fr.add_argument("--size", type=int, default=224)
+    ft = sub.add_parser("scale-finetune", help="leave-one-film-out fine-tuned shot-scale labeller, with fitness")
+    ft.add_argument("films", nargs="+", help="features.npz:labels.csv:frames.npy:cuts.json per film")
+    ft.add_argument("--epochs", type=int, default=3)
+    ft.add_argument("--stride", type=int, default=2)
+    ft.add_argument("--control", action="store_true", help="train on shuffled labels")
+    ft.add_argument("--draws", type=int, default=100)
+    ft.add_argument("--boots", type=int, default=200)
     b = sub.add_parser("breakdown", help="one row per shot (rows.jsonl) plus frame grabs")
     b.add_argument("video")
     b.add_argument("out_dir", type=Path)
@@ -150,6 +161,37 @@ def run(a: argparse.Namespace) -> int:
         model = scale.train_model(films, a.kind)
         scale.save_model(model, a.out)
         print(json.dumps({"trained_on": model["trained_on"], "features": list(model["features"]), "out": str(a.out)}))
+        return 0
+
+    if a.cmd == "frames":
+        import numpy as np
+
+        from kubrick import finetune
+
+        np.save(a.out, finetune.frames_at(a.video, a.size))
+        return 0
+
+    if a.cmd == "scale-finetune":
+        import numpy as np
+
+        from kubrick import finetune, scale
+
+        films, frames, film_cuts = {}, {}, {}
+        for spec in a.films:
+            npz, csv, npy, cut = spec.split(":")
+            name = Path(npz).stem
+            film = scale.load_film(Path(npz), Path(csv))
+            print(json.dumps({"film": name, "aligned": film["align"]["accepted"]}), flush=True)
+            if not film["align"]["accepted"]:
+                continue
+            fr = np.load(npy, mmap_mode="r")
+            n = min(len(fr), len(film["y"]))
+            film["y"] = film["y"][:n]
+            films[name], frames[name], film_cuts[name] = film, fr, json.loads(Path(cut).read_text(encoding="utf-8"))
+        r = finetune.leave_one_out(films, frames, film_cuts, a.epochs, a.stride, a.control, a.draws, a.boots,
+                                   log=lambda m: print(json.dumps({"log": m}), file=sys.stderr, flush=True))
+        for name, v in r.items():
+            print(json.dumps({"test": name, "control": a.control, **v}, default=float), flush=True)
         return 0
 
     if a.cmd == "scale-eval":
