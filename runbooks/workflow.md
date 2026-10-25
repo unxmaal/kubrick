@@ -4,7 +4,7 @@ Follow these steps in order. Each step writes one document into the project fold
 
 No video is rendered before Eric approves the animatic (step 8). Rendering, the pilot and the edit come after that gate, and their tooling is tracked in kubrick #6.
 
-Shot sizes and camera movements use only the labels in `taxonomy.toml`. Continuity rule ids (`axis-180`, `eyeline-match`, `screen-direction`, `action-phase`, `wardrobe-state`) are defined in `src/kubrick/continuity.py`. The grammar run books in `runbooks/grammar/` (kubrick #3) cite them; until that folder exists, skip the steps that refer to it.
+Shot sizes and camera movements use only the labels in `taxonomy.toml`. Continuity rule ids (`axis-180`, `eyeline-match`, `screen-direction`, `action-phase`, `wardrobe-state`) are defined in `src/kubrick/continuity.py`. The grammar run books in `runbooks/grammar/` cite them.
 
 ## 0. Set up
 
@@ -49,7 +49,7 @@ For each scene, list its shots in order. Each shot has:
 - `wardrobe`: the state of each visible item, as the breakdown has it at this shot;
 - `vo`: the narration heard over this shot, if any.
 
-Cover each scene so the audience always knows where they are: open wide enough to place the action, then move in. When the grammar run books in `runbooks/grammar/` exist, follow their coverage and scale rules and note the rule id beside any shot that departs from them.
+Follow `runbooks/grammar/scale.md`: open each scene wide enough to place the action (`scene-opens-wide`), and prefer cuts to the neighbouring size (`one-step-scale-cuts`). Note the rule id in the description of any shot that departs from a rule on purpose.
 
 Check: `uv run kubrick validate <project> --until shotlist` prints `ok`.
 
