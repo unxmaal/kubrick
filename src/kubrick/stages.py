@@ -20,7 +20,7 @@ def schemas() -> dict[str, dict]:
                            "subjects": {"type": "array", "items": {"type": "string"}},
                            "duration_s": {"type": "number", "exclusiveMinimum": 0},
                            "description": {"type": "string", "minLength": 1}, "wardrobe": STATE,
-                           "vo": {"type": "string"}}}
+                           "vo": {"type": "string"}, "vo_audio": {"type": "string"}}}
     camera = {"type": "object", "required": ["pos", "heading", "lens_mm"],
               "properties": {"pos": POINT, "heading": {"type": "number"}, "lens_mm": {"type": "number"}}}
     return {
@@ -114,6 +114,23 @@ def validate_project(root: Path, until: str | None = None) -> list[str]:
         for s in p["breakdown.json"]["scenes"]:
             if s["heading"] not in headings:
                 errors.append(f"breakdown.json: scene {s['id']} heading {s['heading']} is not in the script")
+    if ok("shotlist.json"):
+        for scene in p["shotlist.json"]["scenes"]:
+            for shot in scene["shots"]:
+                if "vo_audio" not in shot:
+                    continue
+                path = p["root"] / shot["vo_audio"]
+                if not path.is_file():
+                    errors.append(f"shotlist.json: shot {shot['id']} voiceover {shot['vo_audio']} does not exist")
+                    continue
+                try:
+                    secs = audio_seconds(path)
+                except ValueError:
+                    errors.append(f"shotlist.json: shot {shot['id']} voiceover {shot['vo_audio']} cannot be read as audio")
+                    continue
+                if secs > shot["duration_s"]:
+                    errors.append(f"shotlist.json: shot {shot['id']} voiceover {shot['vo_audio']} ({secs:.2f} s) "
+                                  f"is longer than the shot ({shot['duration_s']} s)")
     if ok("breakdown.json", "shotlist.json"):
         breakdown = {s["id"] for s in p["breakdown.json"]["scenes"]}
         for scene in p["shotlist.json"]["scenes"]:
@@ -143,6 +160,17 @@ def validate_project(root: Path, until: str | None = None) -> list[str]:
             if panel["shot"] not in shot_ids:
                 errors.append(f"storyboard.json: panel for unknown shot {panel['shot']}")
     return errors
+
+
+def audio_seconds(path: Path) -> float:
+    import subprocess
+
+    r = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(path)],
+                       capture_output=True, text=True)
+    try:
+        return float(r.stdout)
+    except ValueError:
+        raise ValueError(f"{path} cannot be read as audio: {r.stderr.strip()[:200]}") from None
 
 
 def assemble(p: dict, scene_id: str) -> dict:
