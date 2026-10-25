@@ -97,3 +97,37 @@ def test_ci_runs_the_scenario_check_on_pull_requests_with_a_token_that_can_read_
     steps = [s for s in wf["jobs"]["check"]["steps"] if "kubrick scenarios" in s.get("run", "")]
     assert steps and "--pr-body-file" in steps[0]["run"] and "pull_request" in steps[0].get("if", "")
     assert wf["permissions"].get("issues") == "read"
+
+
+def test_cli_panels_draws_unsketched_shots_with_the_project_style_and_model(tmp_path, monkeypatch, capsys):
+    import json as _json
+
+    import numpy as np
+
+    from kubrick import panels
+    from kubrick.cli import main
+
+    root = tmp_path / "p"
+    root.mkdir()
+    shots = [{"id": i, "scale": "LS", "movement": "static", "subjects": ["G"], "duration_s": 2, "description": f"Shot {i}."}
+             for i in ("1A", "1B")]
+    (root / "shotlist.json").write_text(_json.dumps({"scenes": [{"id": "1", "shots": shots}]}))
+    (root / "style.txt").write_text("PENCIL. ", encoding="utf-8")
+    seen = {}
+
+    def fake_soh(model=None, **kw):
+        seen["model"] = model
+
+        def generate(prompt, seed, out):
+            import cv2
+            seen.setdefault("prompts", []).append(prompt)
+            cv2.imwrite(str(out), np.random.default_rng(seed).integers(0, 255, (36, 64, 3), np.uint8))
+            return out
+        return generate
+
+    monkeypatch.setattr(panels, "soh_generate", fake_soh)
+    monkeypatch.setattr(panels, "vision_count", lambda p: (1, 0))
+    assert main(["panels", str(root), "--model", "mflux:z-image-turbo", "--only", "1B"]) == 0
+    assert seen["model"] == "mflux:z-image-turbo" and all(p.startswith("PENCIL. Shot 1B") for p in seen["prompts"])
+    rows = [_json.loads(l) for l in capsys.readouterr().out.splitlines()]
+    assert [r["shot"] for r in rows] == ["1B"] and not rows[0]["flagged"]

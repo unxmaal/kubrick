@@ -70,6 +70,12 @@ def parser() -> argparse.ArgumentParser:
     sc.add_argument("--pr-body-file", type=Path, required=True)
     sc.add_argument("--tests", type=Path, default=Path("tests"))
     sc.add_argument("--repo")
+    pn = sub.add_parser("panels", help="checked storyboard panels for every shot Eric has not sketched (#29)")
+    pn.add_argument("project", type=Path)
+    pn.add_argument("--model", help="soh image engine spec, e.g. mflux:z-image-turbo")
+    pn.add_argument("--style-file", type=Path, help="style lead prepended to every prompt (default <project>/style.txt)")
+    pn.add_argument("--only", nargs="*", help="shot ids to draw")
+    pn.add_argument("--seed", type=int, default=1)
     k = sub.add_parser("card", help="a text storyboard panel for one shot")
     k.add_argument("shot")
     k.add_argument("text")
@@ -107,6 +113,15 @@ def run(a: argparse.Namespace) -> int:
         for name, d in r["directors"].items():
             print(json.dumps({"director": name, **d}))
         print(json.dumps({k: v for k, v in r.items() if k != "directors"}))
+        return 0
+
+    if a.cmd == "panels":
+        from kubrick import panels
+
+        style_file = a.style_file or a.project / "style.txt"
+        style = style_file.read_text(encoding="utf-8") if style_file.exists() else ""
+        for r in panels.run(a.project, style, panels.soh_generate(a.model), panels.vision_count, a.seed, a.only):
+            print(json.dumps(r), flush=True)
         return 0
 
     if a.cmd == "scenarios":
