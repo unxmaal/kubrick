@@ -1,3 +1,5 @@
+import sys
+
 import numpy as np
 import pytest
 
@@ -107,6 +109,32 @@ def test_featurise_records_its_configuration(tmp_path, monkeypatch):
     scale.featurise("unused", out, grid=2)
     d = np.load(out)
     assert (str(d["model"]), int(d["grid"])) == (scale.EMBED_MODEL, 2)
+
+
+macos_only = pytest.mark.skipif(sys.platform != "darwin", reason="Apple Vision is macOS only")
+
+
+@macos_only
+def test_pose_features_on_an_empty_frame_are_zero_and_fixed_length():
+    # negative control only: the positive side is checked on real film frames, which cannot ship here
+    from kubrick import pose
+
+    v = pose.features(np.full((224, 398, 3), 40, np.uint8))
+    assert v.shape == (pose.N_FEATURES,)
+    assert not v.any()
+
+
+@macos_only
+def test_pose_raises_when_vision_fails_rather_than_reporting_no_people(monkeypatch):
+    from kubrick import pose
+
+    class Failing:
+        def performRequests_error_(self, *_):
+            return False, "simulated"
+
+    monkeypatch.setattr(pose, "_handler", lambda data: Failing())
+    with pytest.raises(RuntimeError, match="Vision request failed"):
+        pose.features(np.zeros((224, 398, 3), np.uint8))
 
 
 def test_read_cinescale_marks_not_available(tmp_path):

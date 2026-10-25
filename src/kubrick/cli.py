@@ -31,7 +31,20 @@ def main(argv: list[str] | None = None) -> int:
     f.add_argument("out", type=Path)
     f.add_argument("--model")
     f.add_argument("--grid", type=int)
+    q = sub.add_parser("pose", help="per-second body-pose and face features (.npz)")
+    q.add_argument("video")
+    q.add_argument("out", type=Path)
     a = p.parse_args(argv)
+
+    if a.cmd == "pose":
+        import numpy as np
+
+        from kubrick import pose, scale
+
+        rows = [pose.features(frame) for _, frame in scale.sample_frames(a.video)]
+        np.savez_compressed(a.out, pose=np.array(rows, np.float32), n_features=pose.N_FEATURES,
+                            min_confidence=pose.MIN_CONFIDENCE, height=scale.H)
+        return 0
 
     if a.cmd == "features":
         from kubrick import scale
