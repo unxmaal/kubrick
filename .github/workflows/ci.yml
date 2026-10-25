@@ -1,0 +1,51 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    # Apple Vision (pose.py) is macOS only; standard runners are free on public repos.
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          # tests/test_privacy.py reads every commit message
+          fetch-depth: 0
+
+      - name: Refuse to run on x86
+        run: '[ "$(uname -m)" = arm64 ] || { echo "::error::needs Apple Silicon, runner is $(uname -m)"; exit 1; }'
+
+      - name: Runner
+        run: sysctl -n machdep.cpu.brand_string hw.ncpu hw.memsize
+
+      - name: ffmpeg
+        run: brew install ffmpeg
+
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e  # v10.3.2
+        with:
+          enable-cache: true
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.cache/huggingface
+          key: hf-dinov2-small
+
+      - run: uv sync --locked --python 3.12
+
+      - name: tests
+        run: set -o pipefail && /usr/bin/time -p uv run pytest -q -rs --durations=15 2>&1 | tee /tmp/pytest.log
+
+      - name: rules lint
+        run: uv run kubrick rules lint
