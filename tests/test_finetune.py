@@ -145,3 +145,36 @@ def test_cli_frames_writes_one_square_frame_per_second(tmp_path):
     video(tmp_path / "v.mp4", [20, 200, 90])
     assert main(["frames", str(tmp_path / "v.mp4"), str(tmp_path / "f.npy"), "--size", "16"]) == 0
     assert np.load(tmp_path / "f.npy").shape == (3, 16, 16, 3)
+
+
+def test_fitness_over_seeds_reports_a_fit_rate_per_rule_and_trains_each_seed(monkeypatch):
+    films, cuts = walk_films(("a", "b"))
+    frames = {n: np.zeros((len(films[n]["y"]), 8, 8, 3), np.uint8) for n in films}
+    seen = []
+
+    def fake_train(X, y, seed=0, **kw):
+        seen.append(seed)
+        return {"seed": seed}
+
+    def fake_predict(model, X):
+        # seed 0 predicts perfectly; any other seed scrambles, so the rate must be exactly 1 of 3
+        test = current["test"]
+        truth = films[test]["y"][films[test]["y"] >= 0][:len(X)]
+        return truth if model["seed"] == 0 else np.random.default_rng(model["seed"]).permutation(truth)
+
+    current = {}
+    real = fitness.leave_one_out_with
+
+    def spy(f, c, fit_predict, **kw):
+        def fp(train, test):
+            current["test"] = test
+            return fit_predict(train, test)
+        return real(f, c, fp, **kw)
+
+    monkeypatch.setattr(finetune, "train", fake_train)
+    monkeypatch.setattr(finetune, "predict", fake_predict)
+    monkeypatch.setattr(fitness, "leave_one_out_with", spy)
+    r = finetune.over_seeds(films, frames, cuts, seeds=[0, 1, 2], draws=10, boots=10)
+    assert sorted(set(seen)) == [0, 1, 2]
+    assert set(r) == {"a", "b"} and all(len(v["kappa_linear"]) == 3 for v in r.values())
+    assert all(v["fit_rate"]["one-step-scale-cuts"] == pytest.approx(1 / 3) for v in r.values())
