@@ -17,7 +17,8 @@ jobs:
   check:
     # Apple Vision (pose.py) is macOS only; standard runners are free on public repos.
     runs-on: macos-latest
-    timeout-minutes: 20
+    # 2x the slowest measured job (2m54s) on the slower M1 runner class, which runs up to 2x the M2 Pro (#23)
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
