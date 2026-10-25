@@ -129,6 +129,11 @@ def validate_project(root: Path, until: str | None = None) -> list[str]:
             for shot in scene["shots"]:
                 if shot["id"] not in plan["shots"]:
                     errors.append(f"floorplan.json: scene {scene['id']} has no shot {shot['id']}")
+                for who, target in plan["shots"].get(shot["id"], {}).get("looks", {}).items():
+                    for name in (who, target):
+                        if name not in plan["characters"]:
+                            errors.append(f"floorplan.json: scene {scene['id']} shot {shot['id']} "
+                                          f"looks name {name}, whom the floor plan does not place")
                 for who in shot["subjects"]:
                     if who not in plan["characters"]:
                         errors.append(f"floorplan.json: scene {scene['id']} does not place {who} (shot {shot['id']})")

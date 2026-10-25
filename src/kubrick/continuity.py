@@ -57,6 +57,11 @@ def _eyeline(scene: dict) -> list[dict]:
             target = shot.get("looks", {}).get(who)
             if target is None:
                 continue
+            missing = [n for n in (who, target) if n not in scene["characters"]]
+            if missing:
+                out.append({"rule": "eyeline-match", "shot": shot["id"],
+                            "detail": f"{who} looks at {target}, but the floor plan does not place {', '.join(missing)}"})
+                continue
             (ax, ay), (bx, by) = scene["characters"][who]["pos"], scene["characters"][target]["pos"]
             computed = "right" if _screen_x(shot["camera"], (bx - ax, by - ay)) > 0 else "left"
             if computed != side:
